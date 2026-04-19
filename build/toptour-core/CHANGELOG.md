@@ -35,3 +35,7 @@ Format vychadza z Keep a Changelog a projekt pouziva semanticke verzovanie.
 
 ### Poznamka
 - Verzie pluginu sa odteraz inkrementuju od zakladnej verzie `v1.0.0`.
+
+### Added
+- Manager profile fields (phone, bio, image)
+- Frontend manager contact card on product pages

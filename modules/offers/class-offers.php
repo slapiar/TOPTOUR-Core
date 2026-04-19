@@ -635,6 +635,8 @@ class Toptour_Module_Offers
 
             $this->render_text_input($field_key, $field['label'], $values[$field_key]);
         }
+
+        $this->render_range_validation_script();
     }
 
     /**
@@ -672,11 +674,59 @@ class Toptour_Module_Offers
     private function render_number_input($field_key, $label, $value)
     {
         printf(
-            '<p><label for="%1$s">%2$s</label><br /><input type="number" name="%1$s" id="%1$s" value="%3$s" class="widefat" /></p>',
+            '<p><label for="%1$s">%2$s</label><br /><input type="number" name="%1$s" id="%1$s" value="%3$s" min="0" step="1" class="widefat" /></p>',
             esc_attr($field_key),
             esc_html($label),
             esc_attr((string) $value)
         );
+    }
+
+    /**
+     * Render lightweight client-side validation for range fields.
+     */
+    private function render_range_validation_script()
+    {
+        ?>
+        <script>
+        (function () {
+            var minInput = document.getElementById('persons_min');
+            var maxInput = document.getElementById('persons_max');
+
+            if (!minInput || !maxInput) {
+                return;
+            }
+
+            function normalizeNumber(input) {
+                var value = parseInt(input.value, 10);
+
+                if (!Number.isNaN(value) && value < 0) {
+                    input.value = '0';
+                }
+            }
+
+            function validateRange() {
+                normalizeNumber(minInput);
+                normalizeNumber(maxInput);
+
+                var minValue = parseInt(minInput.value, 10);
+                var maxValue = parseInt(maxInput.value, 10);
+
+                minInput.setCustomValidity('');
+                maxInput.setCustomValidity('');
+
+                if (!Number.isNaN(minValue) && !Number.isNaN(maxValue) && minValue > maxValue) {
+                    var message = 'Persons Min cannot be greater than Persons Max.';
+                    minInput.setCustomValidity(message);
+                    maxInput.setCustomValidity(message);
+                }
+            }
+
+            minInput.addEventListener('input', validateRange);
+            maxInput.addEventListener('input', validateRange);
+            validateRange();
+        })();
+        </script>
+        <?php
     }
 
     /**
@@ -744,6 +794,7 @@ class Toptour_Module_Offers
         }
 
         $schema = $this->get_meta_schema();
+        $sanitized_data = array();
 
         foreach ($schema as $meta_key => $field) {
             if (! isset($_POST[$meta_key])) {
@@ -759,6 +810,31 @@ class Toptour_Module_Offers
                 $sanitized_value = sanitize_text_field($raw_value);
             }
 
+            $sanitized_data[$meta_key] = $sanitized_value;
+        }
+
+        if (isset($sanitized_data['persons_min'])) {
+            $sanitized_data['persons_min'] = max(0, (int) $sanitized_data['persons_min']);
+        }
+
+        if (isset($sanitized_data['persons_max'])) {
+            $sanitized_data['persons_max'] = max(0, (int) $sanitized_data['persons_max']);
+        }
+
+        if (
+            isset($sanitized_data['persons_min']) &&
+            isset($sanitized_data['persons_max']) &&
+            $sanitized_data['persons_min'] > 0 &&
+            $sanitized_data['persons_max'] > 0 &&
+            $sanitized_data['persons_min'] > $sanitized_data['persons_max']
+        ) {
+            $min = (int) $sanitized_data['persons_min'];
+            $max = (int) $sanitized_data['persons_max'];
+            $sanitized_data['persons_min'] = $max;
+            $sanitized_data['persons_max'] = $min;
+        }
+
+        foreach ($sanitized_data as $meta_key => $sanitized_value) {
             update_post_meta($post_id, $meta_key, $sanitized_value);
         }
 
@@ -785,7 +861,7 @@ class Toptour_Module_Offers
     private function sanitize_number_or_text_value($value)
     {
         if (is_numeric($value)) {
-            return (string) floatval($value);
+            return (string) max(0, floatval($value));
         }
 
         return sanitize_text_field($value);
