@@ -8,6 +8,8 @@ class Toptour_Module_Reservations
 {
     private const NONCE_ACTION = 'toptour_submit_inquiry';
     private const NONCE_NAME = 'toptour_inquiry_nonce';
+    private const RESERVATION_CONFIRM_NONCE_ACTION = 'toptour_confirm_reservation';
+    private const RESERVATION_CONFIRM_NONCE_NAME = 'toptour_confirm_reservation_nonce';
     private const ADMIN_UPDATE_NONCE_ACTION = 'toptour_request_update';
     private const ADMIN_DELETE_NONCE_ACTION = 'toptour_request_delete';
 
@@ -20,6 +22,15 @@ class Toptour_Module_Reservations
      * @var array<string, mixed>
      */
     private $inquiry_result = array(
+        'success' => false,
+        'error' => false,
+        'message' => '',
+    );
+
+    /**
+     * @var array<string, mixed>
+     */
+    private $reservation_confirmation_result = array(
         'success' => false,
         'error' => false,
         'message' => '',
@@ -39,7 +50,9 @@ class Toptour_Module_Reservations
     public function register_hooks()
     {
         add_action('init', array($this, 'handle_inquiry_submission'));
+        add_action('init', array($this, 'handle_reservation_confirmation_submission'));
         add_action('woocommerce_single_product_summary', array($this, 'render_inquiry_form'), 45);
+        add_filter('the_content', array($this, 'render_reservation_confirmation'));
         add_action('admin_menu', array($this, 'register_admin_menu'));
         add_action('admin_post_toptour_request_update', array($this, 'handle_admin_request_update'));
         add_action('admin_post_toptour_request_delete', array($this, 'handle_admin_request_delete'));
@@ -367,7 +380,29 @@ class Toptour_Module_Reservations
      */
     private function get_allowed_statuses()
     {
-        return array('new', 'approved', 'rejected');
+        return array('new', 'approved', 'rejected', 'reserved');
+    }
+
+    /**
+     * Get single request row by ID.
+     *
+     * @param int $request_id Request ID.
+     * @return object|null
+     */
+    public function get_request_by_id($request_id)
+    {
+        global $wpdb;
+
+        $request_id = (int) $request_id;
+        if ($request_id <= 0) {
+            return null;
+        }
+
+        $table = $this->get_table_name();
+        $sql = $wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $request_id);
+        $row = $wpdb->get_row($sql);
+
+        return is_object($row) ? $row : null;
     }
 
     /**
@@ -409,6 +444,7 @@ class Toptour_Module_Reservations
         $today = wp_date('Y-m-d');
         $toggle_label = Toptour_Core_I18n::t('cta.check_availability', 'Check availability');
         $required_label_suffix = ' *';
+        $form_started_at = current_time('timestamp');
 
         echo '<div class="toptour-inquiry-form">';
         echo '<p><button type="button" id="toptour-inquiry-open">' . esc_html($toggle_label) . '</button></p>';
@@ -440,8 +476,15 @@ class Toptour_Module_Reservations
         echo '<p><label for="toptour_note">' . esc_html(Toptour_Core_I18n::t('form.note', 'Note')) . '</label><br />';
         echo '<textarea id="toptour_note" name="note" rows="4">' . esc_textarea($note) . '</textarea></p>';
 
+        // Honeypot field for basic bot protection.
+        echo '<p style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;" aria-hidden="true">';
+        echo '<label for="toptour_website">Website</label>';
+        echo '<input type="text" id="toptour_website" name="toptour_website" value="" tabindex="-1" autocomplete="off" />';
+        echo '</p>';
+
         echo '<input type="hidden" name="offer_id" value="' . esc_attr((string) $offer_id) . '" />';
         echo '<input type="hidden" name="toptour_action" value="submit_inquiry" />';
+        echo '<input type="hidden" name="toptour_form_started_at" value="' . esc_attr((string) $form_started_at) . '" />';
         wp_nonce_field(self::NONCE_ACTION, self::NONCE_NAME);
 
         echo '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('form.submit_inquiry', 'Send inquiry')) . '</button></p>';
@@ -555,6 +598,29 @@ class Toptour_Module_Reservations
                 'success' => false,
                 'error' => true,
                 'message' => 'Invalid security nonce.',
+            );
+            return;
+        }
+
+        $honeypot = isset($_POST['toptour_website']) ? trim((string) wp_unslash($_POST['toptour_website'])) : '';
+        if ($honeypot !== '') {
+            $this->inquiry_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => 'Spam check failed.',
+            );
+            return;
+        }
+
+        $started_at_raw = isset($_POST['toptour_form_started_at']) ? absint(wp_unslash($_POST['toptour_form_started_at'])) : 0;
+        $current_ts = (int) current_time('timestamp');
+        $elapsed = $started_at_raw > 0 ? ($current_ts - $started_at_raw) : -1;
+
+        if ($elapsed < 3 || $elapsed > DAY_IN_SECONDS) {
+            $this->inquiry_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => 'Spam check failed.',
             );
             return;
         }
@@ -1359,6 +1425,259 @@ class Toptour_Module_Reservations
     public function get_inquiry_result()
     {
         return $this->inquiry_result;
+    }
+
+    /**
+     * Validate reservation token against approved request.
+     *
+     * @param int    $request_id Request ID.
+     * @param string $token Reservation token.
+     * @return bool
+     */
+    public function validate_reservation_token($request_id, $token)
+    {
+        $request = $this->get_request_by_id((int) $request_id);
+        if (! $request) {
+            return false;
+        }
+
+        if (! isset($request->status) || (string) $request->status !== 'approved') {
+            return false;
+        }
+
+        $provided_token = sanitize_text_field((string) $token);
+        $stored_token = sanitize_text_field((string) $this->get_request_meta((int) $request_id, 'reservation_token', ''));
+
+        if ($provided_token === '' || $stored_token === '') {
+            return false;
+        }
+
+        return hash_equals($stored_token, $provided_token);
+    }
+
+    /**
+     * Render reservation confirmation form/output on confirmation URL.
+     *
+     * @param string $content Current post content.
+     * @return string
+     */
+    public function render_reservation_confirmation($content = '')
+    {
+        if (is_admin()) {
+            return $content;
+        }
+
+        $is_confirmation_page = function_exists('is_page') && is_page('reservation-confirmation');
+        $has_query_args = isset($_GET['request']) || isset($_GET['token']) || isset($_POST['request']) || isset($_POST['token']);
+
+        if (! $is_confirmation_page && ! $has_query_args) {
+            return $content;
+        }
+
+        $request_id = isset($_GET['request']) ? absint(wp_unslash($_GET['request'])) : (isset($_POST['request']) ? absint(wp_unslash($_POST['request'])) : 0);
+        $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : (isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '');
+
+        $invalid_message = '<p>' . esc_html(Toptour_Core_I18n::t('reservation.invalid_link', 'This reservation link is invalid or expired.')) . '</p>';
+
+        if ($request_id <= 0 || $token === '') {
+            return $invalid_message;
+        }
+
+        $request = $this->get_request_by_id($request_id);
+        if (! $request) {
+            return $invalid_message;
+        }
+
+        $stored_token = sanitize_text_field((string) $this->get_request_meta($request_id, 'reservation_token', ''));
+        if ($stored_token === '' || ! hash_equals($stored_token, $token)) {
+            return $invalid_message;
+        }
+
+        if (isset($request->status) && (string) $request->status === 'reserved') {
+            return '<p>' . esc_html(Toptour_Core_I18n::t('reservation.already_reserved', 'This reservation has already been confirmed.')) . '</p>';
+        }
+
+        $result = $this->get_reservation_confirmation_result();
+        if (is_array($result) && (bool) ($result['success'] ?? false) === true) {
+            return '<p>' . esc_html((string) ($result['message'] ?? Toptour_Core_I18n::t('reservation.success', 'Your reservation has been confirmed successfully.'))) . '</p>';
+        }
+
+        if (! $this->validate_reservation_token($request_id, $token)) {
+            return $invalid_message;
+        }
+
+        $customer_name = isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : (isset($request->customer_name) ? sanitize_text_field((string) $request->customer_name) : '');
+        $customer_email = isset($_POST['customer_email']) ? sanitize_email(wp_unslash($_POST['customer_email'])) : (isset($request->customer_email) ? sanitize_email((string) $request->customer_email) : '');
+        $customer_phone = isset($_POST['customer_phone']) ? sanitize_text_field(wp_unslash($_POST['customer_phone'])) : (isset($request->customer_phone) ? sanitize_text_field((string) $request->customer_phone) : '');
+        $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+
+        $output = '';
+
+        if (is_array($result) && (bool) ($result['error'] ?? false) === true && (string) ($result['message'] ?? '') !== '') {
+            $output .= '<p>' . esc_html((string) $result['message']) . '</p>';
+        }
+
+        $output .= '<h3>' . esc_html(Toptour_Core_I18n::t('reservation.heading', 'Reservation confirmation')) . '</h3>';
+        $output .= '<form method="post">';
+        $output .= '<p><label for="toptour_reservation_customer_name">' . esc_html(Toptour_Core_I18n::t('reservation.customer_name', 'Name')) . '</label><br />';
+        $output .= '<input type="text" id="toptour_reservation_customer_name" name="customer_name" value="' . esc_attr($customer_name) . '" required /></p>';
+
+        $output .= '<p><label for="toptour_reservation_customer_email">' . esc_html(Toptour_Core_I18n::t('reservation.customer_email', 'Email')) . '</label><br />';
+        $output .= '<input type="email" id="toptour_reservation_customer_email" name="customer_email" value="' . esc_attr($customer_email) . '" required /></p>';
+
+        $output .= '<p><label for="toptour_reservation_customer_phone">' . esc_html(Toptour_Core_I18n::t('reservation.customer_phone', 'Phone')) . '</label><br />';
+        $output .= '<input type="text" id="toptour_reservation_customer_phone" name="customer_phone" value="' . esc_attr($customer_phone) . '" /></p>';
+
+        $output .= '<p><label for="toptour_reservation_note">' . esc_html(Toptour_Core_I18n::t('reservation.note', 'Note')) . '</label><br />';
+        $output .= '<textarea id="toptour_reservation_note" name="note" rows="4">' . esc_textarea($note) . '</textarea></p>';
+
+        $output .= '<input type="hidden" name="request" value="' . esc_attr((string) $request_id) . '" />';
+        $output .= '<input type="hidden" name="token" value="' . esc_attr($token) . '" />';
+        $output .= '<input type="hidden" name="toptour_action" value="confirm_reservation" />';
+        $output .= wp_nonce_field(self::RESERVATION_CONFIRM_NONCE_ACTION, self::RESERVATION_CONFIRM_NONCE_NAME, true, false);
+        $output .= '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('reservation.submit', 'Confirm reservation')) . '</button></p>';
+        $output .= '</form>';
+
+        return $output;
+    }
+
+    /**
+     * Handle reservation confirmation submit from token-protected form.
+     */
+    public function handle_reservation_confirmation_submission()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return;
+        }
+
+        $action = isset($_POST['toptour_action']) ? sanitize_text_field(wp_unslash($_POST['toptour_action'])) : '';
+        if ($action !== 'confirm_reservation') {
+            return;
+        }
+
+        $request_id = isset($_POST['request']) ? absint(wp_unslash($_POST['request'])) : 0;
+        $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '';
+
+        $invalid_message = Toptour_Core_I18n::t('reservation.invalid_link', 'This reservation link is invalid or expired.');
+
+        if ($request_id <= 0 || $token === '' || ! isset($_POST[self::RESERVATION_CONFIRM_NONCE_NAME])) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => $invalid_message,
+            );
+            return;
+        }
+
+        $nonce = sanitize_text_field(wp_unslash($_POST[self::RESERVATION_CONFIRM_NONCE_NAME]));
+        if (! wp_verify_nonce($nonce, self::RESERVATION_CONFIRM_NONCE_ACTION)) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => $invalid_message,
+            );
+            return;
+        }
+
+        $request = $this->get_request_by_id($request_id);
+        if (! $request) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => $invalid_message,
+            );
+            return;
+        }
+
+        $stored_token = sanitize_text_field((string) $this->get_request_meta($request_id, 'reservation_token', ''));
+        if ($stored_token === '' || ! hash_equals($stored_token, $token)) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => $invalid_message,
+            );
+            return;
+        }
+
+        if (isset($request->status) && (string) $request->status === 'reserved') {
+            $this->reservation_confirmation_result = array(
+                'success' => true,
+                'error' => false,
+                'message' => Toptour_Core_I18n::t('reservation.already_reserved', 'This reservation has already been confirmed.'),
+            );
+            return;
+        }
+
+        if (! $this->validate_reservation_token($request_id, $token)) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => $invalid_message,
+            );
+            return;
+        }
+
+        $customer_name = isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
+        $customer_email = isset($_POST['customer_email']) ? sanitize_email(wp_unslash($_POST['customer_email'])) : '';
+        $customer_phone = isset($_POST['customer_phone']) ? sanitize_text_field(wp_unslash($_POST['customer_phone'])) : '';
+        $note_input = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+
+        if ($customer_name === '' || $customer_email === '' || ! is_email($customer_email)) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => Toptour_Core_I18n::t('form.error', 'Please check the form and try again.'),
+            );
+            return;
+        }
+
+        $existing_note = isset($request->note) ? sanitize_textarea_field((string) $request->note) : '';
+        $note_to_save = $existing_note;
+
+        if (trim($note_input) !== '') {
+            $note_to_save = $this->append_note_log($existing_note, $note_input, $this->get_frontend_note_author_label());
+        }
+
+        global $wpdb;
+        $updated = $wpdb->update(
+            $this->get_table_name(),
+            array(
+                'customer_name' => $customer_name,
+                'customer_email' => $customer_email,
+                'customer_phone' => $customer_phone,
+                'note' => $note_to_save,
+                'status' => 'reserved',
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $request_id),
+            array('%s', '%s', '%s', '%s', '%s', '%s'),
+            array('%d')
+        );
+
+        if ($updated === false) {
+            $this->reservation_confirmation_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => Toptour_Core_I18n::t('form.error', 'Please check the form and try again.'),
+            );
+            return;
+        }
+
+        $this->reservation_confirmation_result = array(
+            'success' => true,
+            'error' => false,
+            'message' => Toptour_Core_I18n::t('reservation.success', 'Your reservation has been confirmed successfully.'),
+        );
+    }
+
+    /**
+     * Get latest reservation confirmation flow result.
+     *
+     * @return array<string, mixed>
+     */
+    private function get_reservation_confirmation_result()
+    {
+        return $this->reservation_confirmation_result;
     }
 
     /**
