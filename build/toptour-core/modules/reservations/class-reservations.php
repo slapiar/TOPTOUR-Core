@@ -232,7 +232,25 @@ class Toptour_Module_Reservations
         $date_to = isset($_POST['date_to']) ? sanitize_text_field(wp_unslash($_POST['date_to'])) : '';
         $adults = isset($_POST['adults']) ? absint(wp_unslash($_POST['adults'])) : 0;
         $children = isset($_POST['children']) ? absint(wp_unslash($_POST['children'])) : 0;
-        $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+        $note_input = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+        $existing_note = is_object($existing_request) && isset($existing_request->note) ? sanitize_textarea_field((string) $existing_request->note) : '';
+        $note_to_save = $existing_note;
+        $trimmed_note_input = trim($note_input);
+
+        if ($trimmed_note_input !== '') {
+            if (trim($existing_note) !== '' && trim($existing_note) === $trimmed_note_input) {
+                $note_to_save = $existing_note;
+            } else {
+                $new_note_message = $note_input;
+
+                if ($existing_note !== '' && strpos($note_input, $existing_note) === 0) {
+                    $new_note_message = trim(substr($note_input, strlen($existing_note)));
+                }
+
+                $note_to_save = $this->append_note_log($existing_note, $new_note_message, $this->get_backend_note_author_label());
+            }
+        }
+
         $status = isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : 'new';
 
         if (! in_array($status, $this->get_allowed_statuses(), true)) {
@@ -251,7 +269,7 @@ class Toptour_Module_Reservations
                 'adults' => $adults,
                 'children' => $children,
                 'persons_total' => $adults + $children,
-                'note' => $note,
+                'note' => $note_to_save,
                 'status' => $status,
                 'updated_at' => current_time('mysql'),
             ),
@@ -271,7 +289,7 @@ class Toptour_Module_Reservations
                 'date_to' => $date_to !== '' ? $date_to : null,
                 'adults' => $adults,
                 'children' => $children,
-                'note' => $note,
+                'note' => $note_to_save,
                 'status' => $status,
             );
 
@@ -549,6 +567,7 @@ class Toptour_Module_Reservations
         $adults = isset($_POST['adults']) ? absint(wp_unslash($_POST['adults'])) : 0;
         $children = isset($_POST['children']) ? absint(wp_unslash($_POST['children'])) : 0;
         $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+        $note_log = $this->append_note_log('', $note, $this->get_frontend_note_author_label());
 
         if ($offer_id <= 0 || $customer_name === '' || $customer_email === '') {
             $this->inquiry_result = array(
@@ -631,7 +650,7 @@ class Toptour_Module_Reservations
             'adults' => $adults,
             'children' => $children,
             'persons_total' => $adults + $children,
-            'note' => $note,
+            'note' => $note_log,
             'source' => 'product_page',
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql'),
@@ -743,6 +762,7 @@ class Toptour_Module_Reservations
         $date_to = isset($request_data['date_to']) && $request_data['date_to'] !== null ? sanitize_text_field((string) $request_data['date_to']) : '';
         $adults = isset($request_data['adults']) ? absint($request_data['adults']) : 0;
         $children = isset($request_data['children']) ? absint($request_data['children']) : 0;
+        $note = isset($request_data['note']) ? trim(sanitize_textarea_field((string) $request_data['note'])) : '';
         $persons_total = $adults + $children;
 
         $manager_name = '';
@@ -776,6 +796,10 @@ class Toptour_Module_Reservations
             Toptour_Core_I18n::t('mail.date_to', 'Date to') . ': ' . ($date_to !== '' ? $date_to : '-'),
             Toptour_Core_I18n::t('label.persons', 'persons') . ': ' . $persons_total . ' (' . $adults . ' + ' . $children . ')',
         );
+
+        if ($note !== '') {
+            $lines[] = Toptour_Core_I18n::t('mail.note', 'Note') . ': ' . $note;
+        }
 
         if ($manager_name !== '' || $manager_email !== '' || $manager_phone !== '') {
             $lines[] = '';
@@ -1089,6 +1113,7 @@ class Toptour_Module_Reservations
         $date_to = isset($request_data['date_to']) && $request_data['date_to'] !== null ? sanitize_text_field((string) $request_data['date_to']) : '';
         $adults = isset($request_data['adults']) ? absint($request_data['adults']) : 0;
         $children = isset($request_data['children']) ? absint($request_data['children']) : 0;
+        $note = isset($request_data['note']) ? trim(sanitize_textarea_field((string) $request_data['note'])) : '';
 
         $manager_name = '';
         $manager_email = '';
@@ -1173,6 +1198,103 @@ class Toptour_Module_Reservations
             ),
             home_url('/reservation-confirmation/')
         );
+    }
+
+    /**
+     * Format one communication log note entry.
+     *
+     * @param string $author_label Author label.
+     * @param string $message Note message.
+     * @param string $timestamp MySQL timestamp.
+     * @return string
+     */
+    private function format_note_log_entry($author_label, $message, $timestamp = '')
+    {
+        $author_label = trim(sanitize_text_field((string) $author_label));
+        $message = trim(sanitize_textarea_field((string) $message));
+        $timestamp = $timestamp !== '' ? sanitize_text_field((string) $timestamp) : current_time('mysql');
+
+        if ($author_label === '' || $message === '') {
+            return '';
+        }
+
+        $single_line_message = preg_replace('/\s+/', ' ', $message);
+
+        return $author_label . ' | ' . $timestamp . ': ' . (string) $single_line_message;
+    }
+
+    /**
+     * Append one formatted note entry to an existing note log.
+     *
+     * @param string $existing_note Existing note log.
+     * @param string $new_message New note message.
+     * @param string $author_label Author label.
+     * @return string
+     */
+    private function append_note_log($existing_note, $new_message, $author_label)
+    {
+        $existing_note = trim(sanitize_textarea_field((string) $existing_note));
+        $entry = $this->format_note_log_entry($author_label, $new_message);
+
+        if ($entry === '') {
+            return $existing_note;
+        }
+
+        if ($existing_note === '') {
+            return $entry;
+        }
+
+        return $existing_note . "\n" . $entry;
+    }
+
+    /**
+     * Resolve note author label for frontend inquiry submissions.
+     *
+     * @return string
+     */
+    private function get_frontend_note_author_label()
+    {
+        if (is_user_logged_in()) {
+            $current_user = wp_get_current_user();
+
+            if ($current_user instanceof WP_User && $current_user->exists()) {
+                $display_name = trim((string) $current_user->display_name);
+                if ($display_name !== '') {
+                    return $display_name;
+                }
+
+                $user_login = trim((string) $current_user->user_login);
+                if ($user_login !== '') {
+                    return $user_login;
+                }
+            }
+        }
+
+        return 'Customer';
+    }
+
+    /**
+     * Resolve note author label for backend/admin updates.
+     *
+     * @return string
+     */
+    private function get_backend_note_author_label()
+    {
+        $current_user = wp_get_current_user();
+
+        if ($current_user instanceof WP_User && $current_user->exists()) {
+            $display_name = trim((string) $current_user->display_name);
+            if ($display_name !== '') {
+                return $display_name;
+            }
+
+            $user_login = trim((string) $current_user->user_login);
+            if ($user_login !== '') {
+                return $user_login;
+            }
+        }
+
+        return 'Admin';
     }
 
     /**
