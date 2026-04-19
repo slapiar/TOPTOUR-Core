@@ -3,7 +3,7 @@
  * Plugin Name: TOPTOUR Core
  * Plugin URI:  https://toptour.sk
  * Description: Core modular foundation for TOPTOUR travel agency plugin.
- * Version:     1.1.2
+ * Version:     1.1.3
  * Author:      TOPTOUR
  * Text Domain: toptour-core
  * Domain Path: /languages
@@ -15,7 +15,7 @@ if (! defined('ABSPATH')) {
 
 define('TOPTOUR_CORE_PATH', plugin_dir_path(__FILE__));
 define('TOPTOUR_CORE_URL', plugin_dir_url(__FILE__));
-define('TOPTOUR_CORE_VERSION', '1.1.2');
+define('TOPTOUR_CORE_VERSION', '1.1.3');
 define('TOPTOUR_CORE_DB_VERSION', '1.0.0');
 
 require_once TOPTOUR_CORE_PATH . 'includes/class-i18n.php';

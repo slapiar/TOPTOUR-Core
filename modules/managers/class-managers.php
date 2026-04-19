@@ -36,6 +36,28 @@ class Toptour_Module_Managers
         add_action('edit_user_profile', array($this, 'render_profile_fields'));
         add_action('personal_options_update', array($this, 'save_profile_fields'));
         add_action('edit_user_profile_update', array($this, 'save_profile_fields'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_profile_assets'));
+    }
+
+    /**
+     * Enqueue media uploader assets for user profile screens.
+     *
+     * @param string $hook_suffix Current admin screen hook.
+     */
+    public function enqueue_profile_assets($hook_suffix)
+    {
+        if ($hook_suffix !== 'profile.php' && $hook_suffix !== 'user-edit.php') {
+            return;
+        }
+
+        wp_enqueue_media();
+        wp_enqueue_script(
+            'toptour-manager-profile-media',
+            TOPTOUR_CORE_URL . 'assets/js/manager-profile-media.js',
+            array(),
+            TOPTOUR_CORE_VERSION,
+            true
+        );
     }
 
     /**
@@ -78,6 +100,7 @@ class Toptour_Module_Managers
         $phone = $this->get_manager_field($user->ID, 'phone', '');
         $bio = $this->get_manager_field($user->ID, 'bio', '');
         $image_id = $this->get_manager_field($user->ID, 'image_id', 0);
+        $image_url = $this->get_manager_image_url($user->ID, 'thumbnail');
 
         echo '<h2>TOPTOUR Manager Profile</h2>';
         echo '<table class="form-table" role="presentation">';
@@ -100,6 +123,13 @@ class Toptour_Module_Managers
         echo '<th><label for="toptour_manager_image_id">Image ID</label></th>';
         echo '<td>';
         echo '<input type="number" name="toptour_manager_image_id" id="toptour_manager_image_id" value="' . esc_attr((string) $image_id) . '" class="regular-text" />';
+        echo '<p>';
+        echo '<button type="button" class="button toptour-manager-select-image">Select image</button> ';
+        echo '<button type="button" class="button toptour-manager-remove-image">Remove image</button>';
+        echo '</p>';
+        echo '<div class="toptour-manager-image-preview"' . ($image_url === '' ? ' hidden="hidden"' : '') . '>';
+        echo '<img src="' . esc_url($image_url) . '" alt="Manager image" width="96" height="96" class="toptour-manager-image-preview-img" />';
+        echo '</div>';
         echo '</td>';
         echo '</tr>';
 
