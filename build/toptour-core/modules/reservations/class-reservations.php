@@ -633,6 +633,7 @@ class Toptour_Module_Reservations
         if ($request_id > 0) {
             $data['id'] = $request_id;
             $this->send_new_inquiry_notifications($request_id, $data);
+            $this->send_customer_autoresponder($request_id, $data);
         }
 
         $this->inquiry_result = array(
@@ -690,6 +691,92 @@ class Toptour_Module_Reservations
         foreach ($recipients as $recipient) {
             wp_mail($recipient, $subject, $message);
         }
+    }
+
+    /**
+     * Send plain-text autoresponder to customer after successful inquiry creation.
+     *
+     * @param int                  $request_id Request ID.
+     * @param array<string, mixed> $request_data Request data.
+     */
+    public function send_customer_autoresponder($request_id, $request_data)
+    {
+        $request_id = (int) $request_id;
+
+        if ($request_id <= 0) {
+            return;
+        }
+
+        $customer_email = isset($request_data['customer_email']) ? sanitize_email((string) $request_data['customer_email']) : '';
+        if ($customer_email === '' || ! is_email($customer_email)) {
+            return;
+        }
+
+        $offer_id = isset($request_data['offer_id']) ? (int) $request_data['offer_id'] : 0;
+        $offer_title = $offer_id > 0 ? sanitize_text_field((string) get_the_title($offer_id)) : '';
+        if ($offer_title === '' && $offer_id > 0) {
+            $offer_title = '#' . $offer_id;
+        }
+
+        $date_from = isset($request_data['date_from']) && $request_data['date_from'] !== null ? sanitize_text_field((string) $request_data['date_from']) : '';
+        $date_to = isset($request_data['date_to']) && $request_data['date_to'] !== null ? sanitize_text_field((string) $request_data['date_to']) : '';
+        $adults = isset($request_data['adults']) ? absint($request_data['adults']) : 0;
+        $children = isset($request_data['children']) ? absint($request_data['children']) : 0;
+        $persons_total = $adults + $children;
+
+        $manager_name = '';
+        $manager_email = '';
+        $manager_phone = '';
+        $manager_user_id = isset($request_data['manager_user_id']) ? (int) $request_data['manager_user_id'] : 0;
+
+        if ($manager_user_id > 0 && class_exists('Toptour_Module_Managers')) {
+            $managers_module = new Toptour_Module_Managers();
+            $manager_summary = $managers_module->get_manager_summary($manager_user_id);
+
+            if (is_array($manager_summary)) {
+                $manager_name = sanitize_text_field((string) ($manager_summary['name'] ?? ''));
+                $manager_email = sanitize_email((string) ($manager_summary['email'] ?? ''));
+                $manager_phone = sanitize_text_field((string) ($manager_summary['phone'] ?? ''));
+            }
+        }
+
+        $subject = Toptour_Core_I18n::t('mail.customer_autoresponder_subject', 'Your inquiry has been received');
+        $summary_heading = Toptour_Core_I18n::t('mail.customer_autoresponder_summary', 'Inquiry summary');
+        $contact_heading = Toptour_Core_I18n::t('mail.customer_autoresponder_contact', 'Your contact person');
+
+        $lines = array(
+            Toptour_Core_I18n::t('mail.customer_autoresponder_greeting', 'Hello,'),
+            '',
+            Toptour_Core_I18n::t('mail.customer_autoresponder_message', 'Thank you for your inquiry. We will contact you shortly.'),
+            '',
+            $summary_heading . ':',
+            Toptour_Core_I18n::t('mail.offer', 'Offer') . ': ' . ($offer_title !== '' ? $offer_title : '-'),
+            Toptour_Core_I18n::t('mail.date_from', 'Date from') . ': ' . ($date_from !== '' ? $date_from : '-'),
+            Toptour_Core_I18n::t('mail.date_to', 'Date to') . ': ' . ($date_to !== '' ? $date_to : '-'),
+            Toptour_Core_I18n::t('label.persons', 'persons') . ': ' . $persons_total . ' (' . $adults . ' + ' . $children . ')',
+        );
+
+        if ($manager_name !== '' || $manager_email !== '' || $manager_phone !== '') {
+            $lines[] = '';
+            $lines[] = $contact_heading . ':';
+
+            if ($manager_name !== '') {
+                $lines[] = 'Name: ' . $manager_name;
+            }
+
+            if ($manager_email !== '' && is_email($manager_email)) {
+                $lines[] = Toptour_Core_I18n::t('manager.email', 'Email') . ': ' . $manager_email;
+            }
+
+            if ($manager_phone !== '') {
+                $lines[] = Toptour_Core_I18n::t('manager.phone', 'Phone') . ': ' . $manager_phone;
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = Toptour_Core_I18n::t('mail.customer_autoresponder_closing', 'Best regards');
+
+        wp_mail($customer_email, $subject, implode("\n", $lines));
     }
 
     /**
