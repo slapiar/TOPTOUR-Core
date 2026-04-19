@@ -162,6 +162,87 @@ class Toptour_Module_Offers
     }
 
     /**
+     * Get a single offer field value from schema-aware meta.
+     *
+     * @param int         $post_id  Product post ID.
+     * @param string      $field_key Field key.
+     * @param mixed|null  $default  Explicit fallback value.
+     * @return mixed
+     */
+    public function get_offer_field($post_id, $field_key, $default = null)
+    {
+        $schema = $this->get_meta_schema();
+
+        if (! isset($schema[$field_key])) {
+            return $default;
+        }
+
+        $field = $schema[$field_key];
+        $stored_value = get_post_meta((int) $post_id, $field_key, true);
+
+        if ($stored_value === '' || $stored_value === null) {
+            $fallback_value = func_num_args() >= 3 ? $default : $field['default'];
+            return $this->normalize_offer_value($fallback_value, $field);
+        }
+
+        return $this->normalize_offer_value($stored_value, $field);
+    }
+
+    /**
+     * Get all offer fields as a schema-based associative array.
+     *
+     * @param int $post_id Product post ID.
+     * @return array<string, mixed>
+     */
+    public function get_offer_data($post_id)
+    {
+        $data = array();
+        $schema = $this->get_meta_schema();
+
+        foreach ($schema as $field_key => $field) {
+            unset($field);
+            $data[$field_key] = $this->get_offer_field($post_id, $field_key);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Get assigned manager user ID for an offer.
+     *
+     * @param int $post_id Product post ID.
+     * @return int
+     */
+    public function get_offer_manager_user_id($post_id)
+    {
+        $manager_user_id = $this->get_offer_field($post_id, 'assigned_manager_user_id', 0);
+        return intval($manager_user_id);
+    }
+
+    /**
+     * Get assigned manager WP_User object for an offer.
+     *
+     * @param int $post_id Product post ID.
+     * @return WP_User|null
+     */
+    public function get_offer_manager($post_id)
+    {
+        $manager_user_id = $this->get_offer_manager_user_id($post_id);
+
+        if ($manager_user_id <= 0) {
+            return null;
+        }
+
+        $user = get_user_by('id', $manager_user_id);
+
+        if (! ($user instanceof WP_User)) {
+            return null;
+        }
+
+        return $user;
+    }
+
+    /**
      * Initialize module.
      */
     public function init()
@@ -413,5 +494,41 @@ class Toptour_Module_Offers
         }
 
         return sanitize_text_field($value);
+    }
+
+    /**
+     * Normalize offer field value according to schema type.
+     *
+     * @param mixed                $value Raw value.
+     * @param array<string, mixed> $field Field schema.
+     * @return mixed
+     */
+    private function normalize_offer_value($value, $field)
+    {
+        if (! isset($field['type'])) {
+            return $value;
+        }
+
+        if ($field['type'] === 'text' || $field['type'] === 'textarea') {
+            return (string) $value;
+        }
+
+        if ($field['type'] === 'user_select') {
+            return intval($value);
+        }
+
+        if ($field['type'] === 'number') {
+            if ($value === '' || $value === null) {
+                return $value;
+            }
+
+            if (is_numeric($value) && strpos((string) $value, '.') !== false) {
+                return floatval($value);
+            }
+
+            return intval($value);
+        }
+
+        return $value;
     }
 }
