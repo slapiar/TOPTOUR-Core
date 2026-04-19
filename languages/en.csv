@@ -36,6 +36,12 @@ form.success = Your inquiry has been sent successfully.
 form.error = Please check the form and try again.
 
 mail.new_inquiry_subject = New inquiry for
+mail.customer_autoresponder_subject = Your inquiry has been received
+mail.customer_autoresponder_greeting = Hello,
+mail.customer_autoresponder_message = Thank you for your inquiry. We will contact you shortly.
+mail.customer_autoresponder_summary = Inquiry summary
+mail.customer_autoresponder_contact = Your contact person
+mail.customer_autoresponder_closing = Best regards
 mail.request_id = Request ID
 mail.offer = Offer
 mail.customer_name = Customer name

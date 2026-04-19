@@ -36,6 +36,12 @@ form.success = Váš dopyt bol úspešne odoslaný.
 form.error = Skontrolujte formulár a skúste to znovu.
 
 mail.new_inquiry_subject = Nový dopyt pre
+mail.customer_autoresponder_subject = Váš dopyt bol prijatý
+mail.customer_autoresponder_greeting = Dobrý deň,
+mail.customer_autoresponder_message = Ďakujeme za váš dopyt. Budeme vás čoskoro kontaktovať.
+mail.customer_autoresponder_summary = Zhrnutie dopytu
+mail.customer_autoresponder_contact = Vaša kontaktná osoba
+mail.customer_autoresponder_closing = S pozdravom
 mail.request_id = ID dopytu
 mail.offer = Ponuka
 mail.customer_name = Meno klienta
