@@ -408,6 +408,7 @@ class Toptour_Module_Reservations
         $note = $can_prefill && isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
         $today = wp_date('Y-m-d');
         $toggle_label = Toptour_Core_I18n::t('cta.check_availability', 'Check availability');
+        $required_label_suffix = ' *';
 
         echo '<div class="toptour-inquiry-form">';
         echo '<p><button type="button" id="toptour-inquiry-open">' . esc_html($toggle_label) . '</button></p>';
@@ -415,10 +416,10 @@ class Toptour_Module_Reservations
         echo '<h3>' . esc_html(Toptour_Core_I18n::t('form.inquiry_heading', 'Check availability')) . '</h3>';
         echo '<form method="post">';
 
-        echo '<p><label for="toptour_customer_name">' . esc_html(Toptour_Core_I18n::t('form.customer_name', 'Name')) . '</label><br />';
+        echo '<p><label for="toptour_customer_name">' . esc_html(Toptour_Core_I18n::t('form.customer_name', 'Name') . $required_label_suffix) . '</label><br />';
         echo '<input type="text" id="toptour_customer_name" name="customer_name" value="' . esc_attr($customer_name) . '" required /></p>';
 
-        echo '<p><label for="toptour_customer_email">' . esc_html(Toptour_Core_I18n::t('form.customer_email', 'Email')) . '</label><br />';
+        echo '<p><label for="toptour_customer_email">' . esc_html(Toptour_Core_I18n::t('form.customer_email', 'Email') . $required_label_suffix) . '</label><br />';
         echo '<input type="email" id="toptour_customer_email" name="customer_email" value="' . esc_attr($customer_email) . '" required /></p>';
 
         echo '<p><label for="toptour_customer_phone">' . esc_html(Toptour_Core_I18n::t('form.customer_phone', 'Phone')) . '</label><br />';
