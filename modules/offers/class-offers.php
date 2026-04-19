@@ -398,6 +398,7 @@ class Toptour_Module_Offers
         add_action('add_meta_boxes', array($this, 'register_admin_fields'));
         add_action('save_post', array($this, 'save_meta_fields'), 10, 2);
         add_action('woocommerce_single_product_summary', array($this, 'render_frontend_offer_details'), 25);
+        add_action('woocommerce_single_product_summary', array($this, 'render_frontend_manager_card'), 35);
     }
 
     /**
@@ -477,6 +478,78 @@ class Toptour_Module_Offers
 
         if ($note !== '') {
             echo '<p><strong>' . esc_html(Toptour_Core_I18n::t('offer.note', 'Note')) . ':</strong><br />' . nl2br(esc_html($note)) . '</p>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * Render manager contact card on WooCommerce single product page.
+     */
+    public function render_frontend_manager_card()
+    {
+        if (! function_exists('is_product') || ! is_product()) {
+            return;
+        }
+
+        $post_id = get_the_ID();
+        if (! $post_id) {
+            return;
+        }
+
+        $manager_user_id = $this->get_offer_manager_user_id($post_id);
+        if ($manager_user_id <= 0) {
+            return;
+        }
+
+        if (! class_exists('Toptour_Module_Managers')) {
+            return;
+        }
+
+        $managers_module = new Toptour_Module_Managers();
+        $summary = $managers_module->get_manager_summary($manager_user_id);
+
+        if (! is_array($summary) || (int) ($summary['id'] ?? 0) <= 0) {
+            return;
+        }
+
+        $name = trim((string) ($summary['name'] ?? ''));
+        $email = trim((string) ($summary['email'] ?? ''));
+        $phone = trim((string) ($summary['phone'] ?? ''));
+        $bio = trim((string) ($summary['bio'] ?? ''));
+        $image_url = trim((string) ($summary['image_url'] ?? ''));
+
+        if ($name === '' && $email === '' && $phone === '' && $bio === '' && $image_url === '') {
+            return;
+        }
+
+        $heading = Toptour_Core_I18n::t('manager.contact', 'Your contact');
+        $email_label = Toptour_Core_I18n::t('manager.email', 'Email');
+        $phone_label = Toptour_Core_I18n::t('manager.phone', 'Phone');
+
+        echo '<div class="toptour-manager-card">';
+        echo '<h3>' . esc_html($heading) . '</h3>';
+
+        if ($image_url !== '') {
+            echo '<p><img src="' . esc_url($image_url) . '" alt="' . esc_attr($name) . '" /></p>';
+        }
+
+        if ($name !== '') {
+            echo '<p><strong>' . esc_html($name) . '</strong></p>';
+        }
+
+        if ($email !== '') {
+            $mailto = 'mailto:' . sanitize_email($email);
+            echo '<p><strong>' . esc_html($email_label) . ':</strong> <a href="' . esc_url($mailto) . '">' . esc_html($email) . '</a></p>';
+        }
+
+        if ($phone !== '') {
+            $phone_href = preg_replace('/[^0-9\+]/', '', $phone);
+            echo '<p><strong>' . esc_html($phone_label) . ':</strong> <a href="' . esc_url('tel:' . $phone_href) . '">' . esc_html($phone) . '</a></p>';
+        }
+
+        if ($bio !== '') {
+            echo '<p>' . nl2br(esc_html($bio)) . '</p>';
         }
 
         echo '</div>';
