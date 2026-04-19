@@ -1,0 +1,17 @@
+offer.details = Detaily ponuky
+offer.location = Lokalita
+offer.duration = Trvanie
+offer.capacity = Kapacita
+offer.price = Cena
+offer.season = Sezóna
+offer.includes = Obsahuje
+offer.excludes = Neobsahuje
+offer.note = Poznámka
+
+cta.reserve = Rezervovať
+cta.check_availability = Overiť dostupnosť
+
+label.person = osoba
+label.persons = osoby
+label.from = od
+label.currency = EUR

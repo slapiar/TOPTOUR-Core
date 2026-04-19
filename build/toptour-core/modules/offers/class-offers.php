@@ -391,6 +391,89 @@ class Toptour_Module_Offers
         add_action('init', array($this, 'register_meta_fields'));
         add_action('add_meta_boxes', array($this, 'register_admin_fields'));
         add_action('save_post', array($this, 'save_meta_fields'), 10, 2);
+        add_action('woocommerce_single_product_summary', array($this, 'render_frontend_offer_details'), 25);
+    }
+
+    /**
+     * Render offer details block on WooCommerce single product page.
+     */
+    public function render_frontend_offer_details()
+    {
+        if (! function_exists('is_product') || ! is_product()) {
+            return;
+        }
+
+        $post_id = get_the_ID();
+        if (! $post_id) {
+            return;
+        }
+
+        $summary = $this->get_offer_summary($post_id);
+        $season = trim((string) $this->get_offer_field($post_id, 'season', ''));
+        $includes = trim((string) $this->get_offer_field($post_id, 'includes', ''));
+        $excludes = trim((string) $this->get_offer_field($post_id, 'excludes', ''));
+        $note = trim((string) $this->get_offer_field($post_id, 'note', ''));
+
+        $has_content = (
+            trim((string) $summary['subtitle']) !== '' ||
+            trim((string) $summary['location']) !== '' ||
+            trim((string) $summary['duration']) !== '' ||
+            trim((string) $summary['persons_label']) !== '' ||
+            trim((string) $summary['price_label']) !== '' ||
+            $season !== '' ||
+            $includes !== '' ||
+            $excludes !== '' ||
+            $note !== ''
+        );
+
+        if (! $has_content) {
+            return;
+        }
+
+        echo '<div class="toptour-offer-details">';
+        echo '<h3>' . esc_html__('TOPTOUR Offer Details', 'toptour-core') . '</h3>';
+
+        if (trim((string) $summary['subtitle']) !== '') {
+            echo '<p><strong>' . esc_html((string) $summary['subtitle']) . '</strong></p>';
+        }
+
+        echo '<ul class="toptour-offer-details-list">';
+
+        if (trim((string) $summary['location']) !== '') {
+            echo '<li><strong>' . esc_html__('Location', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['location']) . '</li>';
+        }
+
+        if (trim((string) $summary['duration']) !== '') {
+            echo '<li><strong>' . esc_html__('Duration', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['duration']) . '</li>';
+        }
+
+        if (trim((string) $summary['persons_label']) !== '') {
+            echo '<li><strong>' . esc_html__('Capacity', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['persons_label']) . '</li>';
+        }
+
+        if (trim((string) $summary['price_label']) !== '') {
+            echo '<li><strong>' . esc_html__('Price', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['price_label']) . '</li>';
+        }
+
+        if ($season !== '') {
+            echo '<li><strong>' . esc_html__('Season', 'toptour-core') . ':</strong> ' . esc_html($season) . '</li>';
+        }
+
+        echo '</ul>';
+
+        if ($includes !== '') {
+            echo '<p><strong>' . esc_html__('Includes', 'toptour-core') . ':</strong><br />' . nl2br(esc_html($includes)) . '</p>';
+        }
+
+        if ($excludes !== '') {
+            echo '<p><strong>' . esc_html__('Excludes', 'toptour-core') . ':</strong><br />' . nl2br(esc_html($excludes)) . '</p>';
+        }
+
+        if ($note !== '') {
+            echo '<p><strong>' . esc_html__('Note', 'toptour-core') . ':</strong><br />' . nl2br(esc_html($note)) . '</p>';
+        }
+
+        echo '</div>';
     }
 
     /**

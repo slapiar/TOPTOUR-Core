@@ -273,6 +273,8 @@ class Toptour_Module_Offers
     {
         $price_from = $this->get_offer_field($post_id, 'price_from', '');
         $price_note = $this->get_offer_field($post_id, 'price_note', '');
+        $label_from = Toptour_Core_I18n::t('label.from', 'od');
+        $label_currency = Toptour_Core_I18n::t('label.currency', 'EUR');
 
         $price_from = trim((string) $price_from);
         $price_note = trim((string) $price_note);
@@ -282,10 +284,10 @@ class Toptour_Module_Offers
         }
 
         if ($price_note !== '') {
-            return 'od ' . $price_from . ' EUR / ' . $price_note;
+            return $label_from . ' ' . $price_from . ' ' . $label_currency . ' / ' . $price_note;
         }
 
-        return 'od ' . $price_from . ' EUR';
+        return $label_from . ' ' . $price_from . ' ' . $label_currency;
     }
 
     /**
@@ -298,22 +300,24 @@ class Toptour_Module_Offers
     {
         $persons_min = (int) $this->get_offer_field($post_id, 'persons_min', 0);
         $persons_max = (int) $this->get_offer_field($post_id, 'persons_max', 0);
+        $label_person = Toptour_Core_I18n::t('label.person', 'osoba');
+        $label_persons = Toptour_Core_I18n::t('label.persons', 'osoby');
 
         if ($persons_min <= 0 && $persons_max <= 0) {
             return '';
         }
 
         if ($persons_min > 0 && $persons_max > 0 && $persons_min !== $persons_max) {
-            return $persons_min . '-' . $persons_max . ' osoby';
+            return $persons_min . '-' . $persons_max . ' ' . $label_persons;
         }
 
         $persons = $persons_min > 0 ? $persons_min : $persons_max;
 
         if ($persons === 1) {
-            return '1 osoba';
+            return '1 ' . $label_person;
         }
 
-        return $persons . ' osoby';
+        return $persons . ' ' . $label_persons;
     }
 
     /**
@@ -326,6 +330,8 @@ class Toptour_Module_Offers
     {
         $mode = (string) $this->get_offer_field($post_id, 'cta_mode', '');
         $mode = trim(strtolower($mode));
+        $label_reserve = Toptour_Core_I18n::t('cta.reserve', 'Rezervovat');
+        $label_check_availability = Toptour_Core_I18n::t('cta.check_availability', 'Overit dostupnost');
 
         if ($mode === '') {
             $mode = 'inquiry';
@@ -334,7 +340,7 @@ class Toptour_Module_Offers
         if ($mode === 'reservation') {
             return array(
                 'mode' => 'reservation',
-                'primary_label' => 'Rezervovat',
+                'primary_label' => $label_reserve,
                 'secondary_label' => '',
             );
         }
@@ -342,14 +348,14 @@ class Toptour_Module_Offers
         if ($mode === 'both') {
             return array(
                 'mode' => 'both',
-                'primary_label' => 'Overit dostupnost',
-                'secondary_label' => 'Rezervovat',
+                'primary_label' => $label_check_availability,
+                'secondary_label' => $label_reserve,
             );
         }
 
         return array(
             'mode' => 'inquiry',
-            'primary_label' => 'Overit dostupnost',
+            'primary_label' => $label_check_availability,
             'secondary_label' => '',
         );
     }
@@ -431,7 +437,7 @@ class Toptour_Module_Offers
         }
 
         echo '<div class="toptour-offer-details">';
-        echo '<h3>' . esc_html__('TOPTOUR Offer Details', 'toptour-core') . '</h3>';
+        echo '<h3>' . esc_html(Toptour_Core_I18n::t('offer.details', 'TOPTOUR Offer Details')) . '</h3>';
 
         if (trim((string) $summary['subtitle']) !== '') {
             echo '<p><strong>' . esc_html((string) $summary['subtitle']) . '</strong></p>';
@@ -440,37 +446,37 @@ class Toptour_Module_Offers
         echo '<ul class="toptour-offer-details-list">';
 
         if (trim((string) $summary['location']) !== '') {
-            echo '<li><strong>' . esc_html__('Location', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['location']) . '</li>';
+            echo '<li><strong>' . esc_html(Toptour_Core_I18n::t('offer.location', 'Location')) . ':</strong> ' . esc_html((string) $summary['location']) . '</li>';
         }
 
         if (trim((string) $summary['duration']) !== '') {
-            echo '<li><strong>' . esc_html__('Duration', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['duration']) . '</li>';
+            echo '<li><strong>' . esc_html(Toptour_Core_I18n::t('offer.duration', 'Duration')) . ':</strong> ' . esc_html((string) $summary['duration']) . '</li>';
         }
 
         if (trim((string) $summary['persons_label']) !== '') {
-            echo '<li><strong>' . esc_html__('Capacity', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['persons_label']) . '</li>';
+            echo '<li><strong>' . esc_html(Toptour_Core_I18n::t('offer.capacity', 'Capacity')) . ':</strong> ' . esc_html((string) $summary['persons_label']) . '</li>';
         }
 
         if (trim((string) $summary['price_label']) !== '') {
-            echo '<li><strong>' . esc_html__('Price', 'toptour-core') . ':</strong> ' . esc_html((string) $summary['price_label']) . '</li>';
+            echo '<li><strong>' . esc_html(Toptour_Core_I18n::t('offer.price', 'Price')) . ':</strong> ' . esc_html((string) $summary['price_label']) . '</li>';
         }
 
         if ($season !== '') {
-            echo '<li><strong>' . esc_html__('Season', 'toptour-core') . ':</strong> ' . esc_html($season) . '</li>';
+            echo '<li><strong>' . esc_html(Toptour_Core_I18n::t('offer.season', 'Season')) . ':</strong> ' . esc_html($season) . '</li>';
         }
 
         echo '</ul>';
 
         if ($includes !== '') {
-            echo '<p><strong>' . esc_html__('Includes', 'toptour-core') . ':</strong><br />' . nl2br(esc_html($includes)) . '</p>';
+            echo '<p><strong>' . esc_html(Toptour_Core_I18n::t('offer.includes', 'Includes')) . ':</strong><br />' . nl2br(esc_html($includes)) . '</p>';
         }
 
         if ($excludes !== '') {
-            echo '<p><strong>' . esc_html__('Excludes', 'toptour-core') . ':</strong><br />' . nl2br(esc_html($excludes)) . '</p>';
+            echo '<p><strong>' . esc_html(Toptour_Core_I18n::t('offer.excludes', 'Excludes')) . ':</strong><br />' . nl2br(esc_html($excludes)) . '</p>';
         }
 
         if ($note !== '') {
-            echo '<p><strong>' . esc_html__('Note', 'toptour-core') . ':</strong><br />' . nl2br(esc_html($note)) . '</p>';
+            echo '<p><strong>' . esc_html(Toptour_Core_I18n::t('offer.note', 'Note')) . ':</strong><br />' . nl2br(esc_html($note)) . '</p>';
         }
 
         echo '</div>';

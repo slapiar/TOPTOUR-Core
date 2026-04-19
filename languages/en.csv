@@ -1,0 +1,17 @@
+offer.details = TOPTOUR Offer Details
+offer.location = Location
+offer.duration = Duration
+offer.capacity = Capacity
+offer.price = Price
+offer.season = Season
+offer.includes = Includes
+offer.excludes = Excludes
+offer.note = Note
+
+cta.reserve = Reserve
+cta.check_availability = Check availability
+
+label.persons = persons
+label.person = person
+label.from = from
+label.currency = EUR
