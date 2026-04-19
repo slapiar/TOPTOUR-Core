@@ -86,6 +86,14 @@ class Toptour_Module_Offers
                 'default' => '',
                 'sanitize_callback' => array($this, 'sanitize_number_or_text_value'),
             ),
+            'price_to' => array(
+                'key' => 'price_to',
+                'label' => 'Price To',
+                'type' => 'number',
+                'section' => 'capacity_price',
+                'default' => '',
+                'sanitize_callback' => array($this, 'sanitize_number_or_text_value'),
+            ),
             'price_note' => array(
                 'key' => 'price_note',
                 'label' => 'Price Note',
@@ -272,15 +280,38 @@ class Toptour_Module_Offers
     public function get_offer_price_label($post_id)
     {
         $price_from = $this->get_offer_field($post_id, 'price_from', '');
+        $price_to = $this->get_offer_field($post_id, 'price_to', '');
         $price_note = $this->get_offer_field($post_id, 'price_note', '');
         $label_from = Toptour_Core_I18n::t('label.from', 'od');
+        $label_to = Toptour_Core_I18n::t('label.to', 'do');
         $label_currency = Toptour_Core_I18n::t('label.currency', 'EUR');
 
         $price_from = trim((string) $price_from);
+        $price_to = trim((string) $price_to);
         $price_note = trim((string) $price_note);
 
-        if ($price_from === '') {
+        if ($price_from === '' && $price_to === '') {
             return '';
+        }
+
+        if ($price_from !== '' && $price_to !== '') {
+            $label = $label_from . ' ' . $price_from . ' ' . $label_to . ' ' . $price_to . ' ' . $label_currency;
+
+            if ($price_note !== '') {
+                return $label . ' / ' . $price_note;
+            }
+
+            return $label;
+        }
+
+        if ($price_to !== '') {
+            $label = $label_to . ' ' . $price_to . ' ' . $label_currency;
+
+            if ($price_note !== '') {
+                return $label . ' / ' . $price_note;
+            }
+
+            return $label;
         }
 
         if ($price_note !== '') {

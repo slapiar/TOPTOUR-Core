@@ -689,14 +689,7 @@ class Toptour_Module_Offers
         ?>
         <script>
         (function () {
-            var minInput = document.getElementById('persons_min');
-            var maxInput = document.getElementById('persons_max');
-
-            if (!minInput || !maxInput) {
-                return;
-            }
-
-            function normalizeNumber(input) {
+            function normalizeInteger(input) {
                 var value = parseInt(input.value, 10);
 
                 if (!Number.isNaN(value) && value < 0) {
@@ -704,26 +697,58 @@ class Toptour_Module_Offers
                 }
             }
 
-            function validateRange() {
-                normalizeNumber(minInput);
-                normalizeNumber(maxInput);
+            function normalizeFloat(input) {
+                var value = parseFloat(input.value);
 
-                var minValue = parseInt(minInput.value, 10);
-                var maxValue = parseInt(maxInput.value, 10);
-
-                minInput.setCustomValidity('');
-                maxInput.setCustomValidity('');
-
-                if (!Number.isNaN(minValue) && !Number.isNaN(maxValue) && minValue > maxValue) {
-                    var message = 'Persons Min cannot be greater than Persons Max.';
-                    minInput.setCustomValidity(message);
-                    maxInput.setCustomValidity(message);
+                if (!Number.isNaN(value) && value < 0) {
+                    input.value = '0';
                 }
             }
 
-            minInput.addEventListener('input', validateRange);
-            maxInput.addEventListener('input', validateRange);
-            validateRange();
+            function bindRangeValidation(minId, maxId, message, normalizeCallback, parser) {
+                var minInput = document.getElementById(minId);
+                var maxInput = document.getElementById(maxId);
+
+                if (!minInput || !maxInput) {
+                    return;
+                }
+
+                function validateRange() {
+                    normalizeCallback(minInput);
+                    normalizeCallback(maxInput);
+
+                    var minValue = parser(minInput.value);
+                    var maxValue = parser(maxInput.value);
+
+                    minInput.setCustomValidity('');
+                    maxInput.setCustomValidity('');
+
+                    if (!Number.isNaN(minValue) && !Number.isNaN(maxValue) && minValue > maxValue) {
+                        minInput.setCustomValidity(message);
+                        maxInput.setCustomValidity(message);
+                    }
+                }
+
+                minInput.addEventListener('input', validateRange);
+                maxInput.addEventListener('input', validateRange);
+                validateRange();
+            }
+
+            bindRangeValidation(
+                'persons_min',
+                'persons_max',
+                'Persons Min cannot be greater than Persons Max.',
+                normalizeInteger,
+                function (value) { return parseInt(value, 10); }
+            );
+
+            bindRangeValidation(
+                'price_from',
+                'price_to',
+                'Price From cannot be greater than Price To.',
+                normalizeFloat,
+                function (value) { return parseFloat(value); }
+            );
         })();
         </script>
         <?php
@@ -832,6 +857,27 @@ class Toptour_Module_Offers
             $max = (int) $sanitized_data['persons_max'];
             $sanitized_data['persons_min'] = $max;
             $sanitized_data['persons_max'] = $min;
+        }
+
+        if (isset($sanitized_data['price_from']) && is_numeric($sanitized_data['price_from'])) {
+            $sanitized_data['price_from'] = max(0, (float) $sanitized_data['price_from']);
+        }
+
+        if (isset($sanitized_data['price_to']) && is_numeric($sanitized_data['price_to'])) {
+            $sanitized_data['price_to'] = max(0, (float) $sanitized_data['price_to']);
+        }
+
+        if (
+            isset($sanitized_data['price_from']) &&
+            isset($sanitized_data['price_to']) &&
+            is_numeric($sanitized_data['price_from']) &&
+            is_numeric($sanitized_data['price_to']) &&
+            (float) $sanitized_data['price_from'] > (float) $sanitized_data['price_to']
+        ) {
+            $from = (float) $sanitized_data['price_from'];
+            $to = (float) $sanitized_data['price_to'];
+            $sanitized_data['price_from'] = $to;
+            $sanitized_data['price_to'] = $from;
         }
 
         foreach ($sanitized_data as $meta_key => $sanitized_value) {

@@ -14,6 +14,7 @@ cta.check_availability = Overiť dostupnosť
 label.person = osoba
 label.persons = osoby
 label.from = od
+label.to = do
 label.currency = EUR
 
 manager.contact = Váš kontakt
