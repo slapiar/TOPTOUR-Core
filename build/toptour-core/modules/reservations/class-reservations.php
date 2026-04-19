@@ -65,6 +65,8 @@ class Toptour_Module_Reservations
         $posted_action = isset($_POST['toptour_action']) ? sanitize_text_field(wp_unslash($_POST['toptour_action'])) : '';
         $posted_offer_id = isset($_POST['offer_id']) ? absint(wp_unslash($_POST['offer_id'])) : 0;
         $can_prefill = ($posted_action === 'submit_inquiry' && $posted_offer_id === (int) $offer_id);
+        $has_error = is_array($result) && (bool) ($result['error'] ?? false) === true;
+        $should_show_form = $has_error || $can_prefill;
 
         $customer_name = $can_prefill && isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
         $customer_email = $can_prefill && isset($_POST['customer_email']) ? sanitize_email(wp_unslash($_POST['customer_email'])) : '';
@@ -75,8 +77,11 @@ class Toptour_Module_Reservations
         $children = $can_prefill && isset($_POST['children']) ? absint(wp_unslash($_POST['children'])) : 0;
         $note = $can_prefill && isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
         $today = wp_date('Y-m-d');
+        $toggle_label = Toptour_Core_I18n::t('cta.check_availability', 'Check availability');
 
         echo '<div class="toptour-inquiry-form">';
+        echo '<p><button type="button" id="toptour-inquiry-toggle">' . esc_html($toggle_label) . '</button></p>';
+        echo '<div id="toptour-inquiry-form-panel"' . ($should_show_form ? '' : ' hidden="hidden"') . '>';
         echo '<h3>' . esc_html(Toptour_Core_I18n::t('form.inquiry_heading', 'Check availability')) . '</h3>';
         echo '<form method="post">';
 
@@ -111,33 +116,40 @@ class Toptour_Module_Reservations
         echo '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('form.submit_inquiry', 'Send inquiry')) . '</button></p>';
         echo '</form>';
         echo '</div>';
+        echo '</div>';
         ?>
         <script>
         (function () {
+            var toggleButton = document.getElementById('toptour-inquiry-toggle');
+            var formPanel = document.getElementById('toptour-inquiry-form-panel');
             var dateFromInput = document.getElementById('toptour_date_from');
             var dateToInput = document.getElementById('toptour_date_to');
 
-            if (!dateFromInput || !dateToInput) {
-                return;
+            if (toggleButton && formPanel) {
+                toggleButton.addEventListener('click', function () {
+                    formPanel.hidden = !formPanel.hidden;
+                });
             }
 
-            function syncDateRange() {
-                var fromValue = dateFromInput.value;
+            if (dateFromInput && dateToInput) {
+                function syncDateRange() {
+                    var fromValue = dateFromInput.value;
 
-                if (fromValue !== '') {
-                    dateToInput.setAttribute('min', fromValue);
+                    if (fromValue !== '') {
+                        dateToInput.setAttribute('min', fromValue);
 
-                    if (dateToInput.value !== '' && dateToInput.value < fromValue) {
-                        dateToInput.value = '';
+                        if (dateToInput.value !== '' && dateToInput.value < fromValue) {
+                            dateToInput.value = '';
+                        }
+                        return;
                     }
-                    return;
+
+                    dateToInput.setAttribute('min', dateFromInput.getAttribute('min') || '');
                 }
 
-                dateToInput.setAttribute('min', dateFromInput.getAttribute('min') || '');
+                dateFromInput.addEventListener('change', syncDateRange);
+                syncDateRange();
             }
-
-            dateFromInput.addEventListener('change', syncDateRange);
-            syncDateRange();
         })();
         </script>
         <?php
