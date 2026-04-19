@@ -15,3 +15,7 @@ label.persons = persons
 label.person = person
 label.from = from
 label.currency = EUR
+
+manager.contact = Your contact
+manager.email = Email
+manager.phone = Phone

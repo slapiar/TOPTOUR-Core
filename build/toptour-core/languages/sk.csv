@@ -15,3 +15,7 @@ label.person = osoba
 label.persons = osoby
 label.from = od
 label.currency = EUR
+
+manager.contact = Váš kontakt
+manager.email = E-mail
+manager.phone = Telefón
