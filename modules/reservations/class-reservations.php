@@ -37,6 +37,79 @@ class Toptour_Module_Reservations
     public function register_hooks()
     {
         add_action('init', array($this, 'handle_inquiry_submission'));
+        add_action('woocommerce_single_product_summary', array($this, 'render_inquiry_form'), 45);
+    }
+
+    /**
+     * Render minimal inquiry form on WooCommerce single product page.
+     */
+    public function render_inquiry_form()
+    {
+        if (! function_exists('is_product') || ! is_product()) {
+            return;
+        }
+
+        $offer_id = get_the_ID();
+        if (! $offer_id) {
+            return;
+        }
+
+        $result = $this->get_inquiry_result();
+
+        if (is_array($result) && (bool) ($result['success'] ?? false) === true) {
+            echo '<p>' . esc_html(Toptour_Core_I18n::t('form.success', 'Your inquiry has been sent successfully.')) . '</p>';
+        } elseif (is_array($result) && (bool) ($result['error'] ?? false) === true) {
+            echo '<p>' . esc_html(Toptour_Core_I18n::t('form.error', 'Please check the form and try again.')) . '</p>';
+        }
+
+        $posted_action = isset($_POST['toptour_action']) ? sanitize_text_field(wp_unslash($_POST['toptour_action'])) : '';
+        $posted_offer_id = isset($_POST['offer_id']) ? absint(wp_unslash($_POST['offer_id'])) : 0;
+        $can_prefill = ($posted_action === 'submit_inquiry' && $posted_offer_id === (int) $offer_id);
+
+        $customer_name = $can_prefill && isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
+        $customer_email = $can_prefill && isset($_POST['customer_email']) ? sanitize_email(wp_unslash($_POST['customer_email'])) : '';
+        $customer_phone = $can_prefill && isset($_POST['customer_phone']) ? sanitize_text_field(wp_unslash($_POST['customer_phone'])) : '';
+        $date_from = $can_prefill && isset($_POST['date_from']) ? sanitize_text_field(wp_unslash($_POST['date_from'])) : '';
+        $date_to = $can_prefill && isset($_POST['date_to']) ? sanitize_text_field(wp_unslash($_POST['date_to'])) : '';
+        $adults = $can_prefill && isset($_POST['adults']) ? absint(wp_unslash($_POST['adults'])) : 0;
+        $children = $can_prefill && isset($_POST['children']) ? absint(wp_unslash($_POST['children'])) : 0;
+        $note = $can_prefill && isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+
+        echo '<div class="toptour-inquiry-form">';
+        echo '<h3>' . esc_html(Toptour_Core_I18n::t('form.inquiry_heading', 'Check availability')) . '</h3>';
+        echo '<form method="post">';
+
+        echo '<p><label for="toptour_customer_name">' . esc_html(Toptour_Core_I18n::t('form.customer_name', 'Name')) . '</label><br />';
+        echo '<input type="text" id="toptour_customer_name" name="customer_name" value="' . esc_attr($customer_name) . '" required /></p>';
+
+        echo '<p><label for="toptour_customer_email">' . esc_html(Toptour_Core_I18n::t('form.customer_email', 'Email')) . '</label><br />';
+        echo '<input type="email" id="toptour_customer_email" name="customer_email" value="' . esc_attr($customer_email) . '" required /></p>';
+
+        echo '<p><label for="toptour_customer_phone">' . esc_html(Toptour_Core_I18n::t('form.customer_phone', 'Phone')) . '</label><br />';
+        echo '<input type="text" id="toptour_customer_phone" name="customer_phone" value="' . esc_attr($customer_phone) . '" /></p>';
+
+        echo '<p><label for="toptour_date_from">' . esc_html(Toptour_Core_I18n::t('form.date_from', 'Date from')) . '</label><br />';
+        echo '<input type="date" id="toptour_date_from" name="date_from" value="' . esc_attr($date_from) . '" /></p>';
+
+        echo '<p><label for="toptour_date_to">' . esc_html(Toptour_Core_I18n::t('form.date_to', 'Date to')) . '</label><br />';
+        echo '<input type="date" id="toptour_date_to" name="date_to" value="' . esc_attr($date_to) . '" /></p>';
+
+        echo '<p><label for="toptour_adults">' . esc_html(Toptour_Core_I18n::t('form.adults', 'Adults')) . '</label><br />';
+        echo '<input type="number" id="toptour_adults" name="adults" min="0" value="' . esc_attr((string) $adults) . '" /></p>';
+
+        echo '<p><label for="toptour_children">' . esc_html(Toptour_Core_I18n::t('form.children', 'Children')) . '</label><br />';
+        echo '<input type="number" id="toptour_children" name="children" min="0" value="' . esc_attr((string) $children) . '" /></p>';
+
+        echo '<p><label for="toptour_note">' . esc_html(Toptour_Core_I18n::t('form.note', 'Note')) . '</label><br />';
+        echo '<textarea id="toptour_note" name="note" rows="4">' . esc_textarea($note) . '</textarea></p>';
+
+        echo '<input type="hidden" name="offer_id" value="' . esc_attr((string) $offer_id) . '" />';
+        echo '<input type="hidden" name="toptour_action" value="submit_inquiry" />';
+        wp_nonce_field(self::NONCE_ACTION, self::NONCE_NAME);
+
+        echo '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('form.submit_inquiry', 'Send inquiry')) . '</button></p>';
+        echo '</form>';
+        echo '</div>';
     }
 
     /**

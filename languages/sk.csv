@@ -20,3 +20,16 @@ label.currency = EUR
 manager.contact = Váš kontakt
 manager.email = E-mail
 manager.phone = Telefón
+
+form.inquiry_heading = Overiť dostupnosť
+form.customer_name = Meno
+form.customer_email = E-mail
+form.customer_phone = Telefón
+form.date_from = Dátum od
+form.date_to = Dátum do
+form.adults = Dospelí
+form.children = Deti
+form.note = Poznámka
+form.submit_inquiry = Odoslať dopyt
+form.success = Váš dopyt bol úspešne odoslaný.
+form.error = Skontrolujte formulár a skúste to znovu.
