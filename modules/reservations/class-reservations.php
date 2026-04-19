@@ -1133,6 +1133,10 @@ class Toptour_Module_Reservations
         $lines[] = Toptour_Core_I18n::t('mail.adults', 'Adults') . ': ' . $adults;
         $lines[] = Toptour_Core_I18n::t('mail.children', 'Children') . ': ' . $children;
 
+        if ($note !== '') {
+            $lines[] = Toptour_Core_I18n::t('mail.note', 'Note') . ': ' . $note;
+        }
+
         if ($manager_name !== '' || ($manager_email !== '' && is_email($manager_email)) || $manager_phone !== '') {
             $lines[] = '';
             $lines[] = Toptour_Core_I18n::t('mail.manager_contact', 'Contact person') . ':';
