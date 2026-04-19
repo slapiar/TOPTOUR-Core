@@ -80,8 +80,8 @@ class Toptour_Module_Reservations
         $toggle_label = Toptour_Core_I18n::t('cta.check_availability', 'Check availability');
 
         echo '<div class="toptour-inquiry-form">';
-        echo '<p><button type="button" id="toptour-inquiry-toggle">' . esc_html($toggle_label) . '</button></p>';
-        echo '<div id="toptour-inquiry-form-panel"' . ($should_show_form ? '' : ' hidden="hidden"') . '>';
+        echo '<p><button type="button" id="toptour-inquiry-open">' . esc_html($toggle_label) . '</button></p>';
+        echo '<dialog id="toptour-inquiry-dialog">';
         echo '<h3>' . esc_html(Toptour_Core_I18n::t('form.inquiry_heading', 'Check availability')) . '</h3>';
         echo '<form method="post">';
 
@@ -115,20 +115,59 @@ class Toptour_Module_Reservations
 
         echo '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('form.submit_inquiry', 'Send inquiry')) . '</button></p>';
         echo '</form>';
-        echo '</div>';
+        echo '<p><button type="button" id="toptour-inquiry-close">Close</button></p>';
+        echo '</dialog>';
         echo '</div>';
         ?>
         <script>
         (function () {
-            var toggleButton = document.getElementById('toptour-inquiry-toggle');
-            var formPanel = document.getElementById('toptour-inquiry-form-panel');
+            var openButton = document.getElementById('toptour-inquiry-open');
+            var closeButton = document.getElementById('toptour-inquiry-close');
+            var dialog = document.getElementById('toptour-inquiry-dialog');
             var dateFromInput = document.getElementById('toptour_date_from');
             var dateToInput = document.getElementById('toptour_date_to');
+            var autoOpen = <?php echo $should_show_form ? 'true' : 'false'; ?>;
 
-            if (toggleButton && formPanel) {
-                toggleButton.addEventListener('click', function () {
-                    formPanel.hidden = !formPanel.hidden;
+            function openDialog() {
+                if (!dialog) {
+                    return;
+                }
+
+                if (typeof dialog.showModal === 'function') {
+                    dialog.showModal();
+                    return;
+                }
+
+                dialog.setAttribute('open', 'open');
+            }
+
+            function closeDialog() {
+                if (!dialog) {
+                    return;
+                }
+
+                if (typeof dialog.close === 'function') {
+                    dialog.close();
+                    return;
+                }
+
+                dialog.removeAttribute('open');
+            }
+
+            if (openButton && dialog) {
+                openButton.addEventListener('click', function () {
+                    openDialog();
                 });
+            }
+
+            if (closeButton && dialog) {
+                closeButton.addEventListener('click', function () {
+                    closeDialog();
+                });
+            }
+
+            if (autoOpen && dialog) {
+                openDialog();
             }
 
             if (dateFromInput && dateToInput) {

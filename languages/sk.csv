@@ -31,5 +31,6 @@ form.adults = Dospelí
 form.children = Deti
 form.note = Poznámka
 form.submit_inquiry = Odoslať dopyt
+form.close = Zavrieť
 form.success = Váš dopyt bol úspešne odoslaný.
 form.error = Skontrolujte formulár a skúste to znovu.
