@@ -34,3 +34,17 @@ form.submit_inquiry = Odoslať dopyt
 form.close = Zavrieť
 form.success = Váš dopyt bol úspešne odoslaný.
 form.error = Skontrolujte formulár a skúste to znovu.
+
+mail.new_inquiry_subject = Nový dopyt pre
+mail.request_id = ID dopytu
+mail.offer = Ponuka
+mail.customer_name = Meno klienta
+mail.customer_email = E-mail klienta
+mail.customer_phone = Telefón klienta
+mail.date_from = Dátum od
+mail.date_to = Dátum do
+mail.adults = Dospelí
+mail.children = Deti
+mail.note = Poznámka
+mail.status = Stav
+mail.admin_link = Admin odkaz

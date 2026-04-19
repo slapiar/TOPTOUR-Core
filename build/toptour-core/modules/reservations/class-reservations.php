@@ -8,6 +8,8 @@ class Toptour_Module_Reservations
 {
     private const NONCE_ACTION = 'toptour_submit_inquiry';
     private const NONCE_NAME = 'toptour_inquiry_nonce';
+    private const ADMIN_UPDATE_NONCE_ACTION = 'toptour_request_update';
+    private const ADMIN_DELETE_NONCE_ACTION = 'toptour_request_delete';
 
     /**
      * @var string
@@ -38,6 +40,295 @@ class Toptour_Module_Reservations
     {
         add_action('init', array($this, 'handle_inquiry_submission'));
         add_action('woocommerce_single_product_summary', array($this, 'render_inquiry_form'), 45);
+        add_action('admin_menu', array($this, 'register_admin_menu'));
+        add_action('admin_post_toptour_request_update', array($this, 'handle_admin_request_update'));
+        add_action('admin_post_toptour_request_delete', array($this, 'handle_admin_request_delete'));
+    }
+
+    /**
+     * Register TOPTOUR admin menu and requests page.
+     */
+    public function register_admin_menu()
+    {
+        add_menu_page(
+            'TOPTOUR',
+            'TOPTOUR',
+            'manage_options',
+            'toptour',
+            array($this, 'render_admin_requests_page')
+        );
+
+        add_submenu_page(
+            'toptour',
+            'Requests',
+            'Requests',
+            'manage_options',
+            'toptour',
+            array($this, 'render_admin_requests_page')
+        );
+    }
+
+    /**
+     * Render requests admin page (list and edit views).
+     */
+    public function render_admin_requests_page()
+    {
+        if (! current_user_can('manage_options')) {
+            return;
+        }
+
+        $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : 'list';
+        $request_id = isset($_GET['request_id']) ? absint(wp_unslash($_GET['request_id'])) : 0;
+
+        echo '<div class="wrap">';
+        echo '<h1>TOPTOUR Requests</h1>';
+
+        if ($view === 'edit' && $request_id > 0) {
+            $this->render_admin_request_edit_form($request_id);
+            echo '</div>';
+            return;
+        }
+
+        $requests = $this->get_admin_requests();
+
+        if (isset($_GET['updated']) && wp_unslash($_GET['updated']) === '1') {
+            echo '<p>Request updated.</p>';
+        }
+
+        if (isset($_GET['deleted']) && wp_unslash($_GET['deleted']) === '1') {
+            echo '<p>Request deleted.</p>';
+        }
+
+        echo '<table class="widefat fixed striped">';
+        echo '<thead><tr>';
+        echo '<th>ID</th>';
+        echo '<th>Created At</th>';
+        echo '<th>Offer ID</th>';
+        echo '<th>Manager User ID</th>';
+        echo '<th>Customer Name</th>';
+        echo '<th>Customer Email</th>';
+        echo '<th>Customer Phone</th>';
+        echo '<th>Date From</th>';
+        echo '<th>Date To</th>';
+        echo '<th>Status</th>';
+        echo '<th>Actions</th>';
+        echo '</tr></thead>';
+        echo '<tbody>';
+
+        if (empty($requests)) {
+            echo '<tr><td colspan="11">No requests found.</td></tr>';
+        } else {
+            foreach ($requests as $request) {
+                $edit_url = add_query_arg(
+                    array(
+                        'page' => 'toptour',
+                        'view' => 'edit',
+                        'request_id' => (int) $request->id,
+                    ),
+                    admin_url('admin.php')
+                );
+
+                $delete_url = wp_nonce_url(
+                    add_query_arg(
+                        array(
+                            'action' => 'toptour_request_delete',
+                            'request_id' => (int) $request->id,
+                        ),
+                        admin_url('admin-post.php')
+                    ),
+                    self::ADMIN_DELETE_NONCE_ACTION . '_' . (int) $request->id
+                );
+
+                echo '<tr>';
+                echo '<td>' . esc_html((string) $request->id) . '</td>';
+                echo '<td>' . esc_html((string) $request->created_at) . '</td>';
+                echo '<td>' . esc_html((string) $request->offer_id) . '</td>';
+                echo '<td>' . esc_html((string) $request->manager_user_id) . '</td>';
+                echo '<td>' . esc_html((string) $request->customer_name) . '</td>';
+                echo '<td>' . esc_html((string) $request->customer_email) . '</td>';
+                echo '<td>' . esc_html((string) $request->customer_phone) . '</td>';
+                echo '<td>' . esc_html((string) $request->date_from) . '</td>';
+                echo '<td>' . esc_html((string) $request->date_to) . '</td>';
+                echo '<td>' . esc_html((string) $request->status) . '</td>';
+                echo '<td><a href="' . esc_url($edit_url) . '">Edit</a> | <a href="' . esc_url($delete_url) . '">Delete</a></td>';
+                echo '</tr>';
+            }
+        }
+
+        echo '</tbody>';
+        echo '</table>';
+        echo '</div>';
+    }
+
+    /**
+     * Render admin edit form for one request.
+     *
+     * @param int $request_id Request ID.
+     */
+    private function render_admin_request_edit_form($request_id)
+    {
+        $request = $this->get_admin_request((int) $request_id);
+
+        if (! $request) {
+            echo '<p>Request not found.</p>';
+            return;
+        }
+
+        $back_url = add_query_arg(array('page' => 'toptour'), admin_url('admin.php'));
+
+        echo '<p><a href="' . esc_url($back_url) . '">Back to requests</a></p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        echo '<input type="hidden" name="action" value="toptour_request_update" />';
+        echo '<input type="hidden" name="request_id" value="' . esc_attr((string) $request->id) . '" />';
+        wp_nonce_field(self::ADMIN_UPDATE_NONCE_ACTION . '_' . (int) $request->id);
+
+        echo '<table class="form-table" role="presentation">';
+
+        echo '<tr><th><label for="customer_name">Customer Name</label></th><td><input type="text" name="customer_name" id="customer_name" value="' . esc_attr((string) $request->customer_name) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th><label for="customer_email">Customer Email</label></th><td><input type="email" name="customer_email" id="customer_email" value="' . esc_attr((string) $request->customer_email) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th><label for="customer_phone">Customer Phone</label></th><td><input type="text" name="customer_phone" id="customer_phone" value="' . esc_attr((string) $request->customer_phone) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th><label for="date_from">Date From</label></th><td><input type="date" name="date_from" id="date_from" value="' . esc_attr((string) $request->date_from) . '" /></td></tr>';
+        echo '<tr><th><label for="date_to">Date To</label></th><td><input type="date" name="date_to" id="date_to" value="' . esc_attr((string) $request->date_to) . '" /></td></tr>';
+        echo '<tr><th><label for="adults">Adults</label></th><td><input type="number" min="0" name="adults" id="adults" value="' . esc_attr((string) $request->adults) . '" /></td></tr>';
+        echo '<tr><th><label for="children">Children</label></th><td><input type="number" min="0" name="children" id="children" value="' . esc_attr((string) $request->children) . '" /></td></tr>';
+        echo '<tr><th><label for="note">Note</label></th><td><textarea name="note" id="note" rows="6" class="large-text">' . esc_textarea((string) $request->note) . '</textarea></td></tr>';
+
+        echo '<tr><th><label for="status">Status</label></th><td>';
+        echo '<select name="status" id="status">';
+        foreach ($this->get_allowed_statuses() as $status) {
+            echo '<option value="' . esc_attr($status) . '" ' . selected((string) $request->status, $status, false) . '>' . esc_html($status) . '</option>';
+        }
+        echo '</select>';
+        echo '</td></tr>';
+
+        echo '</table>';
+        submit_button('Save Request');
+        echo '</form>';
+    }
+
+    /**
+     * Handle secure admin update action.
+     */
+    public function handle_admin_request_update()
+    {
+        if (! current_user_can('manage_options')) {
+            wp_die('Insufficient permissions.');
+        }
+
+        $request_id = isset($_POST['request_id']) ? absint(wp_unslash($_POST['request_id'])) : 0;
+        if ($request_id <= 0) {
+            wp_die('Invalid request ID.');
+        }
+
+        check_admin_referer(self::ADMIN_UPDATE_NONCE_ACTION . '_' . $request_id);
+
+        $customer_name = isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
+        $customer_email = isset($_POST['customer_email']) ? sanitize_email(wp_unslash($_POST['customer_email'])) : '';
+        $customer_phone = isset($_POST['customer_phone']) ? sanitize_text_field(wp_unslash($_POST['customer_phone'])) : '';
+        $date_from = isset($_POST['date_from']) ? sanitize_text_field(wp_unslash($_POST['date_from'])) : '';
+        $date_to = isset($_POST['date_to']) ? sanitize_text_field(wp_unslash($_POST['date_to'])) : '';
+        $adults = isset($_POST['adults']) ? absint(wp_unslash($_POST['adults'])) : 0;
+        $children = isset($_POST['children']) ? absint(wp_unslash($_POST['children'])) : 0;
+        $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+        $status = isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : 'new';
+
+        if (! in_array($status, $this->get_allowed_statuses(), true)) {
+            $status = 'new';
+        }
+
+        global $wpdb;
+        $wpdb->update(
+            $this->get_table_name(),
+            array(
+                'customer_name' => $customer_name,
+                'customer_email' => $customer_email,
+                'customer_phone' => $customer_phone,
+                'date_from' => $date_from !== '' ? $date_from : null,
+                'date_to' => $date_to !== '' ? $date_to : null,
+                'adults' => $adults,
+                'children' => $children,
+                'persons_total' => $adults + $children,
+                'note' => $note,
+                'status' => $status,
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $request_id),
+            array('%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s', '%s'),
+            array('%d')
+        );
+
+        wp_safe_redirect(add_query_arg(array('page' => 'toptour', 'updated' => '1'), admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Handle secure admin delete action.
+     */
+    public function handle_admin_request_delete()
+    {
+        if (! current_user_can('manage_options')) {
+            wp_die('Insufficient permissions.');
+        }
+
+        $request_id = isset($_GET['request_id']) ? absint(wp_unslash($_GET['request_id'])) : 0;
+        if ($request_id <= 0) {
+            wp_die('Invalid request ID.');
+        }
+
+        $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
+        if (! wp_verify_nonce($nonce, self::ADMIN_DELETE_NONCE_ACTION . '_' . $request_id)) {
+            wp_die('Invalid delete nonce.');
+        }
+
+        global $wpdb;
+        $wpdb->delete($this->get_table_name(), array('id' => $request_id), array('%d'));
+
+        wp_safe_redirect(add_query_arg(array('page' => 'toptour', 'deleted' => '1'), admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Get request rows for admin listing.
+     *
+     * @return array<int, object>
+     */
+    private function get_admin_requests()
+    {
+        global $wpdb;
+
+        $table = $this->get_table_name();
+        $sql = "SELECT id, created_at, offer_id, manager_user_id, customer_name, customer_email, customer_phone, date_from, date_to, status FROM {$table} ORDER BY created_at DESC";
+
+        $rows = $wpdb->get_results($sql);
+
+        return is_array($rows) ? $rows : array();
+    }
+
+    /**
+     * Get single request row for admin edit.
+     *
+     * @param int $request_id Request ID.
+     * @return object|null
+     */
+    private function get_admin_request($request_id)
+    {
+        global $wpdb;
+
+        $table = $this->get_table_name();
+        $sql = $wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", (int) $request_id);
+        $row = $wpdb->get_row($sql);
+
+        return is_object($row) ? $row : null;
+    }
+
+    /**
+     * Allowed request statuses.
+     *
+     * @return array<int, string>
+     */
+    private function get_allowed_statuses()
+    {
+        return array('new', 'approved', 'rejected');
     }
 
     /**
@@ -115,7 +406,7 @@ class Toptour_Module_Reservations
 
         echo '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('form.submit_inquiry', 'Send inquiry')) . '</button></p>';
         echo '</form>';
-        echo '<p><button type="button" id="toptour-inquiry-close">Close</button></p>';
+        echo '<p><button type="button" id="toptour-inquiry-close">' . esc_html(Toptour_Core_I18n::t('form.close', 'Close')) . '</button></p>';
         echo '</dialog>';
         echo '</div>';
         ?>

@@ -34,3 +34,17 @@ form.submit_inquiry = Send inquiry
 form.close = Close
 form.success = Your inquiry has been sent successfully.
 form.error = Please check the form and try again.
+
+mail.new_inquiry_subject = New inquiry for
+mail.request_id = Request ID
+mail.offer = Offer
+mail.customer_name = Customer name
+mail.customer_email = Customer email
+mail.customer_phone = Customer phone
+mail.date_from = Date from
+mail.date_to = Date to
+mail.adults = Adults
+mail.children = Children
+mail.note = Note
+mail.status = Status
+mail.admin_link = Admin link

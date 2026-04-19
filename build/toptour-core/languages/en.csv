@@ -31,5 +31,6 @@ form.adults = Adults
 form.children = Children
 form.note = Note
 form.submit_inquiry = Send inquiry
+form.close = Close
 form.success = Your inquiry has been sent successfully.
 form.error = Please check the form and try again.

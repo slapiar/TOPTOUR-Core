@@ -627,11 +627,151 @@ class Toptour_Module_Reservations
             return;
         }
 
+        global $wpdb;
+        $request_id = (int) $wpdb->insert_id;
+
+        if ($request_id > 0) {
+            $data['id'] = $request_id;
+            $this->send_new_inquiry_notifications($request_id, $data);
+        }
+
         $this->inquiry_result = array(
             'success' => true,
             'error' => false,
             'message' => 'Inquiry request submitted successfully.',
         );
+    }
+
+    /**
+     * Send notifications for newly created inquiry.
+     *
+     * @param int                 $request_id Request ID.
+     * @param array<string, mixed> $request_data Request data.
+     */
+    public function send_new_inquiry_notifications($request_id, $request_data)
+    {
+        $request_id = (int) $request_id;
+
+        if ($request_id <= 0) {
+            return;
+        }
+
+        $admin_email = sanitize_email((string) get_option('admin_email', ''));
+        $manager_email = '';
+
+        $manager_user_id = isset($request_data['manager_user_id']) ? (int) $request_data['manager_user_id'] : 0;
+        if ($manager_user_id > 0) {
+            $manager = get_user_by('id', $manager_user_id);
+
+            if ($manager instanceof WP_User) {
+                $manager_email = sanitize_email((string) $manager->user_email);
+            }
+        }
+
+        $recipients_map = array();
+
+        if ($manager_email !== '') {
+            $recipients_map[strtolower($manager_email)] = $manager_email;
+        }
+
+        if ($admin_email !== '') {
+            $recipients_map[strtolower($admin_email)] = $admin_email;
+        }
+
+        $recipients = array_values($recipients_map);
+
+        if (empty($recipients)) {
+            return;
+        }
+
+        $subject = $this->get_new_inquiry_email_subject($request_data);
+        $message = $this->get_new_inquiry_email_message($request_id, $request_data);
+
+        foreach ($recipients as $recipient) {
+            wp_mail($recipient, $subject, $message);
+        }
+    }
+
+    /**
+     * Build email subject for newly created inquiry.
+     *
+     * @param array<string, mixed> $request_data Request data.
+     * @return string
+     */
+    private function get_new_inquiry_email_subject($request_data)
+    {
+        $prefix = Toptour_Core_I18n::t('mail.new_inquiry_subject', 'New inquiry for');
+        $offer_id = isset($request_data['offer_id']) ? (int) $request_data['offer_id'] : 0;
+
+        if ($offer_id > 0) {
+            $offer_title = trim((string) get_the_title($offer_id));
+
+            if ($offer_title !== '') {
+                return $prefix . ' ' . $offer_title;
+            }
+        }
+
+        $request_id = isset($request_data['id']) ? (int) $request_data['id'] : 0;
+
+        if ($request_id > 0) {
+            return $prefix . ' #' . $request_id;
+        }
+
+        return $prefix;
+    }
+
+    /**
+     * Build plain-text email message body for newly created inquiry.
+     *
+     * @param int                  $request_id Request ID.
+     * @param array<string, mixed> $request_data Request data.
+     * @return string
+     */
+    private function get_new_inquiry_email_message($request_id, $request_data)
+    {
+        $request_id = (int) $request_id;
+        $offer_id = isset($request_data['offer_id']) ? (int) $request_data['offer_id'] : 0;
+        $offer_title = $offer_id > 0 ? trim((string) get_the_title($offer_id)) : '';
+
+        $offer_label = $offer_title !== '' ? $offer_title : ($offer_id > 0 ? '#' . $offer_id : '-');
+        $admin_edit_url = $this->get_request_admin_edit_url($request_id);
+
+        $lines = array(
+            Toptour_Core_I18n::t('mail.request_id', 'Request ID') . ': ' . $request_id,
+            Toptour_Core_I18n::t('mail.offer', 'Offer') . ': ' . $offer_label,
+            Toptour_Core_I18n::t('mail.customer_name', 'Customer name') . ': ' . (isset($request_data['customer_name']) ? (string) $request_data['customer_name'] : ''),
+            Toptour_Core_I18n::t('mail.customer_email', 'Customer email') . ': ' . (isset($request_data['customer_email']) ? (string) $request_data['customer_email'] : ''),
+            Toptour_Core_I18n::t('mail.customer_phone', 'Customer phone') . ': ' . (isset($request_data['customer_phone']) ? (string) $request_data['customer_phone'] : ''),
+            Toptour_Core_I18n::t('mail.date_from', 'Date from') . ': ' . (isset($request_data['date_from']) && $request_data['date_from'] !== null ? (string) $request_data['date_from'] : ''),
+            Toptour_Core_I18n::t('mail.date_to', 'Date to') . ': ' . (isset($request_data['date_to']) && $request_data['date_to'] !== null ? (string) $request_data['date_to'] : ''),
+            Toptour_Core_I18n::t('mail.adults', 'Adults') . ': ' . (isset($request_data['adults']) ? (string) $request_data['adults'] : '0'),
+            Toptour_Core_I18n::t('mail.children', 'Children') . ': ' . (isset($request_data['children']) ? (string) $request_data['children'] : '0'),
+            Toptour_Core_I18n::t('mail.note', 'Note') . ': ' . (isset($request_data['note']) ? (string) $request_data['note'] : ''),
+            Toptour_Core_I18n::t('mail.status', 'Status') . ': ' . (isset($request_data['status']) ? (string) $request_data['status'] : 'new'),
+            Toptour_Core_I18n::t('mail.admin_link', 'Admin link') . ': ' . $admin_edit_url,
+        );
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Build admin edit URL for request detail page.
+     *
+     * @param int $request_id Request ID.
+     * @return string
+     */
+    private function get_request_admin_edit_url($request_id)
+    {
+        $url = add_query_arg(
+            array(
+                'page' => 'toptour',
+                'view' => 'edit',
+                'request_id' => (int) $request_id,
+            ),
+            admin_url('admin.php')
+        );
+
+        return (string) $url;
     }
 
     /**
