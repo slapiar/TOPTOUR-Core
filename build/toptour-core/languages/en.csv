@@ -20,3 +20,16 @@ label.currency = EUR
 manager.contact = Your contact
 manager.email = Email
 manager.phone = Phone
+
+form.inquiry_heading = Check availability
+form.customer_name = Name
+form.customer_email = Email
+form.customer_phone = Phone
+form.date_from = Date from
+form.date_to = Date to
+form.adults = Adults
+form.children = Children
+form.note = Note
+form.submit_inquiry = Send inquiry
+form.success = Your inquiry has been sent successfully.
+form.error = Please check the form and try again.

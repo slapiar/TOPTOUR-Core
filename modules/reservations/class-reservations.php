@@ -74,6 +74,7 @@ class Toptour_Module_Reservations
         $adults = $can_prefill && isset($_POST['adults']) ? absint(wp_unslash($_POST['adults'])) : 0;
         $children = $can_prefill && isset($_POST['children']) ? absint(wp_unslash($_POST['children'])) : 0;
         $note = $can_prefill && isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+        $today = wp_date('Y-m-d');
 
         echo '<div class="toptour-inquiry-form">';
         echo '<h3>' . esc_html(Toptour_Core_I18n::t('form.inquiry_heading', 'Check availability')) . '</h3>';
@@ -89,10 +90,10 @@ class Toptour_Module_Reservations
         echo '<input type="text" id="toptour_customer_phone" name="customer_phone" value="' . esc_attr($customer_phone) . '" /></p>';
 
         echo '<p><label for="toptour_date_from">' . esc_html(Toptour_Core_I18n::t('form.date_from', 'Date from')) . '</label><br />';
-        echo '<input type="date" id="toptour_date_from" name="date_from" value="' . esc_attr($date_from) . '" /></p>';
+        echo '<input type="date" id="toptour_date_from" name="date_from" min="' . esc_attr($today) . '" value="' . esc_attr($date_from) . '" /></p>';
 
         echo '<p><label for="toptour_date_to">' . esc_html(Toptour_Core_I18n::t('form.date_to', 'Date to')) . '</label><br />';
-        echo '<input type="date" id="toptour_date_to" name="date_to" value="' . esc_attr($date_to) . '" /></p>';
+        echo '<input type="date" id="toptour_date_to" name="date_to" min="' . esc_attr($today) . '" value="' . esc_attr($date_to) . '" /></p>';
 
         echo '<p><label for="toptour_adults">' . esc_html(Toptour_Core_I18n::t('form.adults', 'Adults')) . '</label><br />';
         echo '<input type="number" id="toptour_adults" name="adults" min="0" value="' . esc_attr((string) $adults) . '" /></p>';
@@ -110,6 +111,36 @@ class Toptour_Module_Reservations
         echo '<p><button type="submit">' . esc_html(Toptour_Core_I18n::t('form.submit_inquiry', 'Send inquiry')) . '</button></p>';
         echo '</form>';
         echo '</div>';
+        ?>
+        <script>
+        (function () {
+            var dateFromInput = document.getElementById('toptour_date_from');
+            var dateToInput = document.getElementById('toptour_date_to');
+
+            if (!dateFromInput || !dateToInput) {
+                return;
+            }
+
+            function syncDateRange() {
+                var fromValue = dateFromInput.value;
+
+                if (fromValue !== '') {
+                    dateToInput.setAttribute('min', fromValue);
+
+                    if (dateToInput.value !== '' && dateToInput.value < fromValue) {
+                        dateToInput.value = '';
+                    }
+                    return;
+                }
+
+                dateToInput.setAttribute('min', dateFromInput.getAttribute('min') || '');
+            }
+
+            dateFromInput.addEventListener('change', syncDateRange);
+            syncDateRange();
+        })();
+        </script>
+        <?php
     }
 
     /**
@@ -170,6 +201,44 @@ class Toptour_Module_Reservations
                 'success' => false,
                 'error' => true,
                 'message' => 'Invalid customer email.',
+            );
+            return;
+        }
+
+        $today = wp_date('Y-m-d');
+
+        if ($date_from !== '' && ! $this->is_valid_date_ymd($date_from)) {
+            $this->inquiry_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => 'Invalid date_from value.',
+            );
+            return;
+        }
+
+        if ($date_to !== '' && ! $this->is_valid_date_ymd($date_to)) {
+            $this->inquiry_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => 'Invalid date_to value.',
+            );
+            return;
+        }
+
+        if (($date_from !== '' && $date_from < $today) || ($date_to !== '' && $date_to < $today)) {
+            $this->inquiry_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => 'Dates cannot be in the past.',
+            );
+            return;
+        }
+
+        if ($date_from !== '' && $date_to !== '' && $date_from > $date_to) {
+            $this->inquiry_result = array(
+                'success' => false,
+                'error' => true,
+                'message' => 'Date from cannot be after date to.',
             );
             return;
         }
@@ -332,5 +401,18 @@ class Toptour_Module_Reservations
             KEY request_type (request_type),
             KEY created_at (created_at)
         )";
+    }
+
+    /**
+     * Validate YYYY-MM-DD date format.
+     *
+     * @param string $value Raw date string.
+     * @return bool
+     */
+    private function is_valid_date_ymd($value)
+    {
+        $date = DateTime::createFromFormat('Y-m-d', $value);
+
+        return $date instanceof DateTime && $date->format('Y-m-d') === $value;
     }
 }
