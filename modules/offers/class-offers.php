@@ -243,6 +243,139 @@ class Toptour_Module_Offers
     }
 
     /**
+     * Get normalized summary payload for one offer.
+     *
+     * @param int $post_id Product post ID.
+     * @return array<string, mixed>
+     */
+    public function get_offer_summary($post_id)
+    {
+        return array(
+            'post_id' => (int) $post_id,
+            'title' => (string) get_the_title($post_id),
+            'subtitle' => $this->get_offer_field($post_id, 'offer_subtitle', ''),
+            'location' => $this->get_offer_field($post_id, 'location', ''),
+            'duration' => $this->get_offer_field($post_id, 'duration', ''),
+            'price_label' => $this->get_offer_price_label($post_id),
+            'persons_label' => $this->get_offer_persons_label($post_id),
+            'cta' => $this->get_offer_cta_config($post_id),
+            'manager' => $this->get_offer_manager_summary($post_id),
+        );
+    }
+
+    /**
+     * Build simple price label from offer fields.
+     *
+     * @param int $post_id Product post ID.
+     * @return string
+     */
+    public function get_offer_price_label($post_id)
+    {
+        $price_from = $this->get_offer_field($post_id, 'price_from', '');
+        $price_note = $this->get_offer_field($post_id, 'price_note', '');
+
+        $price_from = trim((string) $price_from);
+        $price_note = trim((string) $price_note);
+
+        if ($price_from === '') {
+            return '';
+        }
+
+        if ($price_note !== '') {
+            return 'od ' . $price_from . ' EUR / ' . $price_note;
+        }
+
+        return 'od ' . $price_from . ' EUR';
+    }
+
+    /**
+     * Build simple persons label from min/max values.
+     *
+     * @param int $post_id Product post ID.
+     * @return string
+     */
+    public function get_offer_persons_label($post_id)
+    {
+        $persons_min = (int) $this->get_offer_field($post_id, 'persons_min', 0);
+        $persons_max = (int) $this->get_offer_field($post_id, 'persons_max', 0);
+
+        if ($persons_min <= 0 && $persons_max <= 0) {
+            return '';
+        }
+
+        if ($persons_min > 0 && $persons_max > 0 && $persons_min !== $persons_max) {
+            return $persons_min . '-' . $persons_max . ' osoby';
+        }
+
+        $persons = $persons_min > 0 ? $persons_min : $persons_max;
+
+        if ($persons === 1) {
+            return '1 osoba';
+        }
+
+        return $persons . ' osoby';
+    }
+
+    /**
+     * Get CTA config payload from cta_mode.
+     *
+     * @param int $post_id Product post ID.
+     * @return array<string, string>
+     */
+    public function get_offer_cta_config($post_id)
+    {
+        $mode = (string) $this->get_offer_field($post_id, 'cta_mode', '');
+        $mode = trim(strtolower($mode));
+
+        if ($mode === '') {
+            $mode = 'inquiry';
+        }
+
+        if ($mode === 'reservation') {
+            return array(
+                'mode' => 'reservation',
+                'primary_label' => 'Rezervovat',
+                'secondary_label' => '',
+            );
+        }
+
+        if ($mode === 'both') {
+            return array(
+                'mode' => 'both',
+                'primary_label' => 'Overit dostupnost',
+                'secondary_label' => 'Rezervovat',
+            );
+        }
+
+        return array(
+            'mode' => 'inquiry',
+            'primary_label' => 'Overit dostupnost',
+            'secondary_label' => '',
+        );
+    }
+
+    /**
+     * Get normalized manager summary payload.
+     *
+     * @param int $post_id Product post ID.
+     * @return array<string, mixed>|null
+     */
+    public function get_offer_manager_summary($post_id)
+    {
+        $manager = $this->get_offer_manager($post_id);
+
+        if (! ($manager instanceof WP_User)) {
+            return null;
+        }
+
+        return array(
+            'id' => (int) $manager->ID,
+            'name' => (string) $manager->display_name,
+            'email' => (string) $manager->user_email,
+        );
+    }
+
+    /**
      * Initialize module.
      */
     public function init()
