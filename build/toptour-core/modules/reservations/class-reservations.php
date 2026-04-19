@@ -222,6 +222,9 @@ class Toptour_Module_Reservations
 
         check_admin_referer(self::ADMIN_UPDATE_NONCE_ACTION . '_' . $request_id);
 
+        $existing_request = $this->get_admin_request($request_id);
+        $old_status = is_object($existing_request) && isset($existing_request->status) ? sanitize_text_field((string) $existing_request->status) : '';
+
         $customer_name = isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
         $customer_email = isset($_POST['customer_email']) ? sanitize_email(wp_unslash($_POST['customer_email'])) : '';
         $customer_phone = isset($_POST['customer_phone']) ? sanitize_text_field(wp_unslash($_POST['customer_phone'])) : '';
@@ -237,7 +240,7 @@ class Toptour_Module_Reservations
         }
 
         global $wpdb;
-        $wpdb->update(
+        $updated = $wpdb->update(
             $this->get_table_name(),
             array(
                 'customer_name' => $customer_name,
@@ -256,6 +259,24 @@ class Toptour_Module_Reservations
             array('%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s', '%s'),
             array('%d')
         );
+
+        if ($updated !== false) {
+            $request_data = array(
+                'offer_id' => is_object($existing_request) && isset($existing_request->offer_id) ? (int) $existing_request->offer_id : 0,
+                'manager_user_id' => is_object($existing_request) && isset($existing_request->manager_user_id) ? (int) $existing_request->manager_user_id : 0,
+                'customer_name' => $customer_name,
+                'customer_email' => $customer_email,
+                'customer_phone' => $customer_phone,
+                'date_from' => $date_from !== '' ? $date_from : null,
+                'date_to' => $date_to !== '' ? $date_to : null,
+                'adults' => $adults,
+                'children' => $children,
+                'note' => $note,
+                'status' => $status,
+            );
+
+            $this->maybe_send_customer_status_email($request_id, $old_status, $status, $request_data);
+        }
 
         wp_safe_redirect(add_query_arg(array('page' => 'toptour', 'updated' => '1'), admin_url('admin.php')));
         exit;
@@ -859,6 +880,295 @@ class Toptour_Module_Reservations
         );
 
         return (string) $url;
+    }
+
+    /**
+     * Send plain-text customer status email after admin update when eligible.
+     *
+     * @param int                  $request_id Request ID.
+     * @param string               $old_status Previous status.
+     * @param string               $new_status New status.
+     * @param array<string, mixed> $request_data Request data.
+     */
+    private function maybe_send_customer_status_email($request_id, $old_status, $new_status, $request_data)
+    {
+        $request_id = (int) $request_id;
+        if ($request_id <= 0) {
+            return;
+        }
+
+        $old_status = sanitize_text_field((string) $old_status);
+        $new_status = sanitize_text_field((string) $new_status);
+
+        if ($old_status === $new_status) {
+            return;
+        }
+
+        if (! in_array($new_status, array('approved', 'rejected'), true)) {
+            return;
+        }
+
+        $customer_email = isset($request_data['customer_email']) ? sanitize_email((string) $request_data['customer_email']) : '';
+        if ($customer_email === '' || ! is_email($customer_email)) {
+            return;
+        }
+
+        $subject = $this->get_customer_status_email_subject($new_status, $request_data);
+        $message = $this->get_customer_status_email_message($request_id, $new_status, $request_data);
+
+        if ($subject === '' || $message === '') {
+            return;
+        }
+
+        wp_mail($customer_email, $subject, $message);
+    }
+
+    /**
+     * Ensure a reservation token exists for request and return it.
+     *
+     * @param int $request_id Request ID.
+     * @return string
+     */
+    private function ensure_reservation_token($request_id)
+    {
+        $request_id = (int) $request_id;
+        if ($request_id <= 0) {
+            return '';
+        }
+
+        $existing_token = sanitize_text_field((string) $this->get_request_meta($request_id, 'reservation_token', ''));
+        if ($existing_token !== '') {
+            return $existing_token;
+        }
+
+        $token = wp_generate_password(48, false, false);
+        if ($token === '') {
+            return '';
+        }
+
+        $token_saved = $this->upsert_request_meta($request_id, 'reservation_token', $token);
+        $created_at_saved = $this->upsert_request_meta($request_id, 'reservation_token_created_at', current_time('mysql'));
+
+        if (! $token_saved || ! $created_at_saved) {
+            return '';
+        }
+
+        return $token;
+    }
+
+    /**
+     * Get request meta value from custom request_meta table.
+     *
+     * @param int    $request_id Request ID.
+     * @param string $meta_key Meta key.
+     * @param string $default Default value.
+     * @return string
+     */
+    private function get_request_meta($request_id, $meta_key, $default = '')
+    {
+        global $wpdb;
+
+        $request_id = (int) $request_id;
+        $meta_key = sanitize_text_field((string) $meta_key);
+
+        if ($request_id <= 0 || $meta_key === '') {
+            return (string) $default;
+        }
+
+        $table = $wpdb->prefix . 'toptour_request_meta';
+        $sql = $wpdb->prepare(
+            "SELECT meta_value FROM {$table} WHERE request_id = %d AND meta_key = %s ORDER BY id DESC LIMIT 1",
+            $request_id,
+            $meta_key
+        );
+        $meta_value = $wpdb->get_var($sql);
+
+        if ($meta_value === null) {
+            return (string) $default;
+        }
+
+        return (string) $meta_value;
+    }
+
+    /**
+     * Insert or update one request meta key in custom request_meta table.
+     *
+     * @param int    $request_id Request ID.
+     * @param string $meta_key Meta key.
+     * @param string $meta_value Meta value.
+     * @return bool
+     */
+    private function upsert_request_meta($request_id, $meta_key, $meta_value)
+    {
+        global $wpdb;
+
+        $request_id = (int) $request_id;
+        $meta_key = sanitize_text_field((string) $meta_key);
+        $meta_value = sanitize_text_field((string) $meta_value);
+
+        if ($request_id <= 0 || $meta_key === '') {
+            return false;
+        }
+
+        $table = $wpdb->prefix . 'toptour_request_meta';
+        $existing_id = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT id FROM {$table} WHERE request_id = %d AND meta_key = %s ORDER BY id DESC LIMIT 1",
+                $request_id,
+                $meta_key
+            )
+        );
+
+        if ($existing_id > 0) {
+            $updated = $wpdb->update(
+                $table,
+                array('meta_value' => $meta_value),
+                array('id' => $existing_id),
+                array('%s'),
+                array('%d')
+            );
+
+            return $updated !== false;
+        }
+
+        $inserted = $wpdb->insert(
+            $table,
+            array(
+                'request_id' => $request_id,
+                'meta_key' => $meta_key,
+                'meta_value' => $meta_value,
+            ),
+            array('%d', '%s', '%s')
+        );
+
+        return $inserted !== false;
+    }
+
+    /**
+     * Build customer status-change email subject.
+     *
+     * @param string               $new_status New status.
+     * @param array<string, mixed> $request_data Request data.
+     * @return string
+     */
+    private function get_customer_status_email_subject($new_status, $request_data)
+    {
+        if ($new_status === 'approved') {
+            return Toptour_Core_I18n::t('mail.status_approved_subject', 'Your availability request was approved');
+        }
+
+        if ($new_status === 'rejected') {
+            return Toptour_Core_I18n::t('mail.status_rejected_subject', 'Your availability request could not be approved');
+        }
+
+        return '';
+    }
+
+    /**
+     * Build plain-text customer status-change email body.
+     *
+     * @param int                  $request_id Request ID.
+     * @param string               $new_status New status.
+     * @param array<string, mixed> $request_data Request data.
+     * @return string
+     */
+    private function get_customer_status_email_message($request_id, $new_status, $request_data)
+    {
+        $request_id = (int) $request_id;
+        if ($request_id <= 0) {
+            return '';
+        }
+
+        $offer_id = isset($request_data['offer_id']) ? (int) $request_data['offer_id'] : 0;
+        $offer_title = $offer_id > 0 ? sanitize_text_field((string) get_the_title($offer_id)) : '';
+        if ($offer_title === '' && $offer_id > 0) {
+            $offer_title = '#' . $offer_id;
+        }
+
+        $date_from = isset($request_data['date_from']) && $request_data['date_from'] !== null ? sanitize_text_field((string) $request_data['date_from']) : '';
+        $date_to = isset($request_data['date_to']) && $request_data['date_to'] !== null ? sanitize_text_field((string) $request_data['date_to']) : '';
+        $adults = isset($request_data['adults']) ? absint($request_data['adults']) : 0;
+        $children = isset($request_data['children']) ? absint($request_data['children']) : 0;
+
+        $manager_name = '';
+        $manager_email = '';
+        $manager_phone = '';
+        $manager_user_id = isset($request_data['manager_user_id']) ? (int) $request_data['manager_user_id'] : 0;
+
+        if ($manager_user_id > 0 && class_exists('Toptour_Module_Managers')) {
+            $managers_module = new Toptour_Module_Managers();
+            $manager_summary = $managers_module->get_manager_summary($manager_user_id);
+
+            if (is_array($manager_summary)) {
+                $manager_name = sanitize_text_field((string) ($manager_summary['name'] ?? ''));
+                $manager_email = sanitize_email((string) ($manager_summary['email'] ?? ''));
+                $manager_phone = sanitize_text_field((string) ($manager_summary['phone'] ?? ''));
+            }
+        }
+
+        $lines = array();
+
+        if ($new_status === 'approved') {
+            $token = $this->ensure_reservation_token($request_id);
+            if ($token === '') {
+                return '';
+            }
+
+            $reservation_link = $this->get_reservation_link($request_id, $token);
+            $lines[] = Toptour_Core_I18n::t('mail.status_approved_message', 'Your requested availability has been confirmed. You can continue with reservation using the link below.');
+            $lines[] = '';
+            $lines[] = Toptour_Core_I18n::t('mail.reservation_link', 'Reservation link') . ': ' . $reservation_link;
+        } elseif ($new_status === 'rejected') {
+            $lines[] = Toptour_Core_I18n::t('mail.status_rejected_message', 'Unfortunately, your requested availability could not be confirmed.');
+        } else {
+            return '';
+        }
+
+        $lines[] = '';
+        $lines[] = Toptour_Core_I18n::t('mail.request_summary', 'Request summary') . ':';
+        $lines[] = Toptour_Core_I18n::t('mail.request_id', 'Request ID') . ': ' . $request_id;
+        $lines[] = Toptour_Core_I18n::t('mail.offer', 'Offer') . ': ' . ($offer_title !== '' ? $offer_title : '-');
+        $lines[] = Toptour_Core_I18n::t('mail.date_from', 'Date from') . ': ' . ($date_from !== '' ? $date_from : '-');
+        $lines[] = Toptour_Core_I18n::t('mail.date_to', 'Date to') . ': ' . ($date_to !== '' ? $date_to : '-');
+        $lines[] = Toptour_Core_I18n::t('mail.adults', 'Adults') . ': ' . $adults;
+        $lines[] = Toptour_Core_I18n::t('mail.children', 'Children') . ': ' . $children;
+
+        if ($manager_name !== '' || ($manager_email !== '' && is_email($manager_email)) || $manager_phone !== '') {
+            $lines[] = '';
+            $lines[] = Toptour_Core_I18n::t('mail.manager_contact', 'Contact person') . ':';
+
+            if ($manager_name !== '') {
+                $lines[] = Toptour_Core_I18n::t('form.customer_name', 'Name') . ': ' . $manager_name;
+            }
+
+            if ($manager_email !== '' && is_email($manager_email)) {
+                $lines[] = Toptour_Core_I18n::t('manager.email', 'Email') . ': ' . $manager_email;
+            }
+
+            if ($manager_phone !== '') {
+                $lines[] = Toptour_Core_I18n::t('manager.phone', 'Phone') . ': ' . $manager_phone;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Build reservation confirmation URL for approved requests.
+     *
+     * @param int    $request_id Request ID.
+     * @param string $token Reservation token.
+     * @return string
+     */
+    private function get_reservation_link($request_id, $token)
+    {
+        return (string) add_query_arg(
+            array(
+                'request' => (int) $request_id,
+                'token' => sanitize_text_field((string) $token),
+            ),
+            home_url('/reservation-confirmation/')
+        );
     }
 
     /**
