@@ -46,7 +46,7 @@ class Toptour_Core_Loader
         return array(
             'Toptour_Module_Offers',
             'Toptour_Module_Managers',
-            'Toptour_Reservations_Module',
+            'Toptour_Module_Reservations',
         );
     }
 }
