@@ -39,3 +39,26 @@ Format vychadza z Keep a Changelog a projekt pouziva semanticke verzovanie.
 ### Added
 - Manager profile fields (phone, bio, image)
 - Frontend manager contact card on product pages
+
+## Snapshot – 2026-04-20
+
+State:
+- customers module implemented
+- inquiry → customer sync active
+
+Notes:
+- DB upgrade mechanism not implemented yet
+- admin edit not syncing customers
+
+Backup:
+- toptour-core-1.1.0-2026-04-20-source.tar.gz
+
+## [unreleased] - Release safety hardening
+
+Changed:
+- release script now requires a clean git workspace
+- release script no longer auto-commits unrelated changes
+
+Notes:
+- release ZIP still contains the full plugin
+- archive/backup artifacts are excluded from packaging

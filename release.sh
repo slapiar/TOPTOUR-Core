@@ -23,10 +23,8 @@ if [[ "$CURRENT_BRANCH" == "main" ]]; then
 fi
 
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Máš necommitnuté zmeny."
-  read -r -p "Commit message: " COMMIT_MSG
-  git add .
-  git commit -m "$COMMIT_MSG"
+  echo "Chyba: workspace nie je čistý. Commitni alebo stashni zmeny pred release."
+  exit 1
 fi
 
 CURRENT_VERSION="$(grep -E "^[[:space:]]*\*[[:space:]]+Version:" "$PLUGIN_FILE" | sed -E 's/.*Version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
@@ -86,6 +84,11 @@ rsync -av \
   --exclude="$BUILD_DIR" \
   --exclude="$DIST_DIR" \
   --exclude="*.zip" \
+  --exclude="*.tar.gz" \
+  --exclude="*.sha256" \
+  --exclude="*.log" \
+  --exclude=".DS_Store" \
+  --exclude="node_modules" \
   --exclude="release.sh" \
   ./ "$BUILD_DIR/$PLUGIN_SLUG/"
 
