@@ -115,3 +115,14 @@ Changed:
 Notes:
 - this phase uses only existing request statuses
 - scope is limited to operational filtering and search
+
+## [1.1.27] - Customers status filter
+
+Added:
+- status filter to the Customers admin overview
+
+Changed:
+- customers list context now preserves status filter together with search and pagination
+
+Notes:
+- allowed customer status filters are lead, customer, and inactive

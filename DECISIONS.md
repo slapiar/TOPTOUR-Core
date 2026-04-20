@@ -66,3 +66,14 @@ Why:
 - Requests are daily operational data
 - search and filtering provide immediate value
 - small scope reduces risk and keeps development predictable
+
+## Customers status filter scope
+
+- Customers overview now supports filtering by existing status values
+- Status filter works together with search and pagination
+- Preserved list context includes page number, search term, and status
+
+Why:
+- improves day-to-day usability of customer management
+- keeps the customers admin UI small and predictable
+- avoids premature CRM complexity

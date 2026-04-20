@@ -75,8 +75,12 @@ class Toptour_Module_Customers
 
         $per_page = 20;
         $search = isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '';
+        $status_filter = isset($_GET['status']) ? sanitize_text_field(wp_unslash($_GET['status'])) : '';
+        if (! in_array($status_filter, $this->allowed_statuses, true)) {
+            $status_filter = '';
+        }
 
-        $listing = $this->get_customers_listing($page, $per_page, $search);
+        $listing = $this->get_customers_listing($page, $per_page, $search, $status_filter);
         $customers = isset($listing['items']) && is_array($listing['items']) ? $listing['items'] : array();
         $total_items = isset($listing['total']) ? (int) $listing['total'] : 0;
         $total_pages = max(1, (int) ceil($total_items / $per_page));
@@ -85,12 +89,18 @@ class Toptour_Module_Customers
         if ($search !== '') {
             $base_args['s'] = $search;
         }
+        if ($status_filter !== '') {
+            $base_args['status'] = $status_filter;
+        }
 
         $list_context = array(
             'paged' => $page,
         );
         if ($search !== '') {
             $list_context['s'] = $search;
+        }
+        if ($status_filter !== '') {
+            $list_context['status'] = $status_filter;
         }
 
         echo '<div class="wrap">';
@@ -126,6 +136,12 @@ class Toptour_Module_Customers
         echo '<p class="search-box">';
         echo '<label class="screen-reader-text" for="customer-search-input">' . esc_html('Hľadať zákazníkov') . '</label>';
         echo '<input type="search" id="customer-search-input" name="s" value="' . esc_attr($search) . '" />';
+        echo '<select name="status" id="customer-status-filter">';
+        echo '<option value="">' . esc_html('All statuses') . '</option>';
+        foreach ($this->allowed_statuses as $allowed_status) {
+            echo '<option value="' . esc_attr($allowed_status) . '" ' . selected($status_filter, $allowed_status, false) . '>' . esc_html($allowed_status) . '</option>';
+        }
+        echo '</select>';
         echo '<input type="submit" class="button" value="' . esc_attr('Hľadať') . '" />';
         echo '</p>';
         echo '</form>';
@@ -282,6 +298,9 @@ class Toptour_Module_Customers
         }
         if (isset($list_context['s'])) {
             echo '<input type="hidden" name="s" value="' . esc_attr((string) $list_context['s']) . '" />';
+        }
+        if (isset($list_context['status'])) {
+            echo '<input type="hidden" name="status" value="' . esc_attr((string) $list_context['status']) . '" />';
         }
 
         echo '<table class="form-table" role="presentation">';
@@ -473,6 +492,16 @@ class Toptour_Module_Customers
             }
         }
 
+        if (isset($raw['status'])) {
+            $status_raw = wp_unslash($raw['status']);
+            if (is_scalar($status_raw)) {
+                $status = sanitize_text_field((string) $status_raw);
+                if ($status !== '' && in_array($status, $this->allowed_statuses, true)) {
+                    $context['status'] = $status;
+                }
+            }
+        }
+
         return $context;
     }
 
@@ -522,9 +551,10 @@ class Toptour_Module_Customers
      * @param int    $page Current page number.
      * @param int    $per_page Number of items per page.
      * @param string $search Search term (name, email, phone).
+     * @param string $status_filter Status filter.
      * @return array<string, mixed>
      */
-    public function get_customers_listing($page, $per_page, $search = '')
+    public function get_customers_listing($page, $per_page, $search = '', $status_filter = '')
     {
         global $wpdb;
 
@@ -533,14 +563,28 @@ class Toptour_Module_Customers
         $per_page = max(1, (int) $per_page);
         $offset = ($page - 1) * $per_page;
         $search = sanitize_text_field((string) $search);
+        $status_filter = sanitize_text_field((string) $status_filter);
+        if (! in_array($status_filter, $this->allowed_statuses, true)) {
+            $status_filter = '';
+        }
 
         $where_sql = '';
+        $where_clauses = array();
         $where_params = array();
 
         if ($search !== '') {
             $like = '%' . $wpdb->esc_like($search) . '%';
-            $where_sql = ' WHERE (name LIKE %s OR email LIKE %s OR phone LIKE %s)';
-            $where_params = array($like, $like, $like);
+            $where_clauses[] = '(name LIKE %s OR email LIKE %s OR phone LIKE %s)';
+            $where_params = array_merge($where_params, array($like, $like, $like));
+        }
+
+        if ($status_filter !== '') {
+            $where_clauses[] = 'status = %s';
+            $where_params[] = $status_filter;
+        }
+
+        if (! empty($where_clauses)) {
+            $where_sql = ' WHERE ' . implode(' AND ', $where_clauses);
         }
 
         $count_sql = "SELECT COUNT(*) FROM {$table_name}{$where_sql}";
