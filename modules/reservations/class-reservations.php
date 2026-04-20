@@ -90,6 +90,13 @@ class Toptour_Module_Reservations
             return;
         }
 
+        $list_context = $this->get_admin_list_context_from_get();
+        $page = isset($list_context['paged']) ? (int) $list_context['paged'] : 1;
+        $page = max(1, $page);
+        $search = isset($list_context['s']) ? (string) $list_context['s'] : '';
+        $status_filter = isset($list_context['status']) ? (string) $list_context['status'] : '';
+        $per_page = 20;
+
         $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : 'list';
         $request_id = isset($_GET['request_id']) ? absint(wp_unslash($_GET['request_id'])) : 0;
 
@@ -97,12 +104,23 @@ class Toptour_Module_Reservations
         echo '<h1>TOPTOUR Requests</h1>';
 
         if ($view === 'edit' && $request_id > 0) {
-            $this->render_admin_request_edit_form($request_id);
+            $this->render_admin_request_edit_form($request_id, $list_context);
             echo '</div>';
             return;
         }
 
-        $requests = $this->get_admin_requests();
+        $listing = $this->get_admin_requests_listing($page, $per_page, $search, $status_filter);
+        $requests = isset($listing['items']) && is_array($listing['items']) ? $listing['items'] : array();
+        $total_items = isset($listing['total']) ? (int) $listing['total'] : 0;
+        $total_pages = max(1, (int) ceil($total_items / $per_page));
+
+        $base_args = array('page' => 'toptour');
+        if ($search !== '') {
+            $base_args['s'] = $search;
+        }
+        if ($status_filter !== '') {
+            $base_args['status'] = $status_filter;
+        }
 
         if (isset($_GET['updated']) && wp_unslash($_GET['updated']) === '1') {
             echo '<p>Request updated.</p>';
@@ -111,6 +129,21 @@ class Toptour_Module_Reservations
         if (isset($_GET['deleted']) && wp_unslash($_GET['deleted']) === '1') {
             echo '<p>Request deleted.</p>';
         }
+
+        echo '<form method="get" action="' . esc_url(admin_url('admin.php')) . '">';
+        echo '<input type="hidden" name="page" value="toptour" />';
+        echo '<p class="search-box">';
+        echo '<label class="screen-reader-text" for="request-search-input">' . esc_html('Search requests') . '</label>';
+        echo '<input type="search" id="request-search-input" name="s" value="' . esc_attr($search) . '" /> ';
+        echo '<select name="status" id="request-status-filter">';
+        echo '<option value="">' . esc_html('All statuses') . '</option>';
+        foreach ($this->get_allowed_statuses() as $status) {
+            echo '<option value="' . esc_attr($status) . '" ' . selected($status_filter, $status, false) . '>' . esc_html($status) . '</option>';
+        }
+        echo '</select> ';
+        echo '<input type="submit" class="button" value="' . esc_attr('Filter') . '" />';
+        echo '</p>';
+        echo '</form>';
 
         echo '<table class="widefat fixed striped">';
         echo '<thead><tr>';
@@ -133,19 +166,25 @@ class Toptour_Module_Reservations
         } else {
             foreach ($requests as $request) {
                 $edit_url = add_query_arg(
-                    array(
-                        'page' => 'toptour',
-                        'view' => 'edit',
-                        'request_id' => (int) $request->id,
+                    array_merge(
+                        array(
+                            'page' => 'toptour',
+                            'view' => 'edit',
+                            'request_id' => (int) $request->id,
+                        ),
+                        $list_context
                     ),
                     admin_url('admin.php')
                 );
 
                 $delete_url = wp_nonce_url(
                     add_query_arg(
-                        array(
-                            'action' => 'toptour_request_delete',
-                            'request_id' => (int) $request->id,
+                        array_merge(
+                            array(
+                                'action' => 'toptour_request_delete',
+                                'request_id' => (int) $request->id,
+                            ),
+                            $list_context
                         ),
                         admin_url('admin-post.php')
                     ),
@@ -163,13 +202,34 @@ class Toptour_Module_Reservations
                 echo '<td>' . esc_html((string) $request->date_from) . '</td>';
                 echo '<td>' . esc_html((string) $request->date_to) . '</td>';
                 echo '<td>' . esc_html((string) $request->status) . '</td>';
-                echo '<td><a href="' . esc_url($edit_url) . '">Edit</a> | <a href="' . esc_url($delete_url) . '">Delete</a></td>';
+                echo '<td><a href="' . esc_url($edit_url) . '">Edit</a> | <a href="' . esc_url($delete_url) . '" onclick="return confirm(\'' . esc_js('Are you sure you want to delete this request?') . '\');">Delete</a></td>';
                 echo '</tr>';
             }
         }
 
         echo '</tbody>';
         echo '</table>';
+
+        if ($total_pages > 1) {
+            $pagination_links = paginate_links(
+                array(
+                    'base' => add_query_arg('paged', '%#%', admin_url('admin.php?' . http_build_query($base_args))),
+                    'format' => '',
+                    'current' => $page,
+                    'total' => $total_pages,
+                    'type' => 'array',
+                )
+            );
+
+            if (is_array($pagination_links) && ! empty($pagination_links)) {
+                echo '<div class="tablenav"><div class="tablenav-pages"><span class="pagination-links">';
+                foreach ($pagination_links as $link) {
+                    echo wp_kses_post($link) . ' ';
+                }
+                echo '</span></div></div>';
+            }
+        }
+
         echo '</div>';
     }
 
@@ -178,7 +238,7 @@ class Toptour_Module_Reservations
      *
      * @param int $request_id Request ID.
      */
-    private function render_admin_request_edit_form($request_id)
+    private function render_admin_request_edit_form($request_id, $list_context = array())
     {
         $request = $this->get_admin_request((int) $request_id);
 
@@ -187,12 +247,21 @@ class Toptour_Module_Reservations
             return;
         }
 
-        $back_url = add_query_arg(array('page' => 'toptour'), admin_url('admin.php'));
+        $back_url = add_query_arg(array_merge(array('page' => 'toptour'), $list_context), admin_url('admin.php'));
 
         echo '<p><a href="' . esc_url($back_url) . '">Back to requests</a></p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         echo '<input type="hidden" name="action" value="toptour_request_update" />';
         echo '<input type="hidden" name="request_id" value="' . esc_attr((string) $request->id) . '" />';
+        if (isset($list_context['paged'])) {
+            echo '<input type="hidden" name="paged" value="' . esc_attr((string) $list_context['paged']) . '" />';
+        }
+        if (isset($list_context['s'])) {
+            echo '<input type="hidden" name="s" value="' . esc_attr((string) $list_context['s']) . '" />';
+        }
+        if (isset($list_context['status'])) {
+            echo '<input type="hidden" name="list_status" value="' . esc_attr((string) $list_context['status']) . '" />';
+        }
         wp_nonce_field(self::ADMIN_UPDATE_NONCE_ACTION . '_' . (int) $request->id);
 
         echo '<table class="form-table" role="presentation">';
@@ -227,6 +296,8 @@ class Toptour_Module_Reservations
         if (! current_user_can('manage_options')) {
             wp_die('Insufficient permissions.');
         }
+
+        $list_context = $this->get_admin_list_context_from_post();
 
         $request_id = isset($_POST['request_id']) ? absint(wp_unslash($_POST['request_id'])) : 0;
         if ($request_id <= 0) {
@@ -320,7 +391,7 @@ class Toptour_Module_Reservations
             $this->maybe_send_customer_status_email($request_id, $old_status, $status, $request_data);
         }
 
-        wp_safe_redirect(add_query_arg(array('page' => 'toptour', 'updated' => '1'), admin_url('admin.php')));
+        wp_safe_redirect(add_query_arg(array_merge(array('page' => 'toptour', 'updated' => '1'), $list_context), admin_url('admin.php')));
         exit;
     }
 
@@ -332,6 +403,8 @@ class Toptour_Module_Reservations
         if (! current_user_can('manage_options')) {
             wp_die('Insufficient permissions.');
         }
+
+        $list_context = $this->get_admin_list_context_from_get();
 
         $request_id = isset($_GET['request_id']) ? absint(wp_unslash($_GET['request_id'])) : 0;
         if ($request_id <= 0) {
@@ -346,7 +419,7 @@ class Toptour_Module_Reservations
         global $wpdb;
         $wpdb->delete($this->get_table_name(), array('id' => $request_id), array('%d'));
 
-        wp_safe_redirect(add_query_arg(array('page' => 'toptour', 'deleted' => '1'), admin_url('admin.php')));
+        wp_safe_redirect(add_query_arg(array_merge(array('page' => 'toptour', 'deleted' => '1'), $list_context), admin_url('admin.php')));
         exit;
     }
 
@@ -365,6 +438,127 @@ class Toptour_Module_Reservations
         $rows = $wpdb->get_results($sql);
 
         return is_array($rows) ? $rows : array();
+    }
+
+    /**
+     * Get paginated request rows for admin listing with filters.
+     *
+     * @param int    $page Current page.
+     * @param int    $per_page Items per page.
+     * @param string $search Search term.
+     * @param string $status_filter Status filter.
+     * @return array<string, mixed>
+     */
+    private function get_admin_requests_listing($page, $per_page, $search = '', $status_filter = '')
+    {
+        global $wpdb;
+
+        $table = $this->get_table_name();
+        $page = max(1, (int) $page);
+        $per_page = max(1, (int) $per_page);
+        $offset = ($page - 1) * $per_page;
+        $search = sanitize_text_field((string) $search);
+        $status_filter = sanitize_text_field((string) $status_filter);
+
+        $where_sql = '';
+        $where_clauses = array();
+        $where_params = array();
+
+        if ($search !== '') {
+            $like = '%' . $wpdb->esc_like($search) . '%';
+            $where_clauses[] = '(customer_name LIKE %s OR customer_email LIKE %s OR customer_phone LIKE %s OR request_type LIKE %s OR note LIKE %s OR CAST(offer_id AS CHAR) LIKE %s)';
+            $where_params = array_merge($where_params, array($like, $like, $like, $like, $like, $like));
+        }
+
+        if ($status_filter !== '' && in_array($status_filter, $this->get_allowed_statuses(), true)) {
+            $where_clauses[] = 'status = %s';
+            $where_params[] = $status_filter;
+        }
+
+        if (! empty($where_clauses)) {
+            $where_sql = ' WHERE ' . implode(' AND ', $where_clauses);
+        }
+
+        $count_sql = "SELECT COUNT(*) FROM {$table}{$where_sql}";
+        if (! empty($where_params)) {
+            $count_sql = $wpdb->prepare($count_sql, $where_params);
+        }
+        $total = (int) $wpdb->get_var($count_sql);
+
+        $items_sql = "SELECT id, created_at, offer_id, manager_user_id, customer_name, customer_email, customer_phone, date_from, date_to, status FROM {$table}{$where_sql} ORDER BY created_at DESC LIMIT %d OFFSET %d";
+        $items_params = array_merge($where_params, array($per_page, $offset));
+        $prepared_items_sql = $wpdb->prepare($items_sql, $items_params);
+        $items = $wpdb->get_results($prepared_items_sql);
+
+        return array(
+            'items' => is_array($items) ? $items : array(),
+            'total' => $total,
+        );
+    }
+
+    /**
+     * Return sanitized admin list context from GET.
+     *
+     * @return array<string, string|int>
+     */
+    private function get_admin_list_context_from_get()
+    {
+        return $this->sanitize_admin_list_context($_GET, true);
+    }
+
+    /**
+     * Return sanitized admin list context from POST.
+     *
+     * @return array<string, string|int>
+     */
+    private function get_admin_list_context_from_post()
+    {
+        return $this->sanitize_admin_list_context($_POST, false);
+    }
+
+    /**
+     * Sanitize and whitelist admin requests list context.
+     *
+     * @param array<mixed> $raw Raw input.
+     * @param bool         $is_get True for GET source.
+     * @return array<string, string|int>
+     */
+    private function sanitize_admin_list_context($raw, $is_get)
+    {
+        $context = array();
+
+        if (isset($raw['paged'])) {
+            $paged_raw = wp_unslash($raw['paged']);
+            if (is_scalar($paged_raw)) {
+                $paged = absint((string) $paged_raw);
+                if ($paged >= 1) {
+                    $context['paged'] = $paged;
+                }
+            }
+        }
+
+        if (isset($raw['s'])) {
+            $search_raw = wp_unslash($raw['s']);
+            if (is_scalar($search_raw)) {
+                $search = sanitize_text_field((string) $search_raw);
+                if ($search !== '') {
+                    $context['s'] = $search;
+                }
+            }
+        }
+
+        $status_key = $is_get ? 'status' : 'list_status';
+        if (isset($raw[$status_key])) {
+            $status_raw = wp_unslash($raw[$status_key]);
+            if (is_scalar($status_raw)) {
+                $status = sanitize_text_field((string) $status_raw);
+                if ($status !== '' && in_array($status, $this->get_allowed_statuses(), true)) {
+                    $context['status'] = $status;
+                }
+            }
+        }
+
+        return $context;
     }
 
     /**

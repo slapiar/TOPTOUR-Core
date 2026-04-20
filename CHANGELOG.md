@@ -102,3 +102,16 @@ Changed:
 
 Notes:
 - preserved context currently includes page number and search term only
+
+## [1.1.26] - Requests search and status filter
+
+Added:
+- basic search to the Requests admin overview
+- status filter for the Requests list
+
+Changed:
+- requests list context can preserve search/filter state where applicable
+
+Notes:
+- this phase uses only existing request statuses
+- scope is limited to operational filtering and search

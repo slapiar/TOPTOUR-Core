@@ -54,3 +54,15 @@ Why:
 - improves usability of the admin customers overview
 - reduces friction when managing larger customer lists
 - keeps the solution small and predictable
+
+## First Requests search/filter scope
+
+- Requests admin overview gets basic search and status filtering first
+- Only existing request statuses are used
+- Scope is limited to operational usability improvements
+- Advanced filtering, export, and bulk actions are deferred
+
+Why:
+- Requests are daily operational data
+- search and filtering provide immediate value
+- small scope reduces risk and keeps development predictable
