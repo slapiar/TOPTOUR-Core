@@ -34,6 +34,7 @@ class Toptour_Core_Loader
         $module_files = array(
             TOPTOUR_CORE_PATH . 'modules/offers/class-offers.php',
             TOPTOUR_CORE_PATH . 'modules/managers/class-managers.php',
+            TOPTOUR_CORE_PATH . 'modules/customers/class-customers.php',
             TOPTOUR_CORE_PATH . 'modules/reservations/class-reservations.php',
         );
 
@@ -46,6 +47,7 @@ class Toptour_Core_Loader
         return array(
             'Toptour_Module_Offers',
             'Toptour_Module_Managers',
+            'Toptour_Module_Customers',
             'Toptour_Module_Reservations',
         );
     }

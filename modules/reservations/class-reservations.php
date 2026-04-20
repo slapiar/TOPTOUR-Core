@@ -738,6 +738,17 @@ class Toptour_Module_Reservations
         $request_id = (int) $wpdb->insert_id;
 
         if ($request_id > 0) {
+            if (class_exists('Toptour_Module_Customers')) {
+                $customers_module = new Toptour_Module_Customers();
+                $customers_module->upsert_customer(
+                    array(
+                        'name' => $customer_name,
+                        'email' => $customer_email,
+                        'phone' => $customer_phone,
+                    )
+                );
+            }
+
             $data['id'] = $request_id;
             $this->send_new_inquiry_notifications($request_id, $data);
             $this->send_customer_autoresponder($request_id, $data);

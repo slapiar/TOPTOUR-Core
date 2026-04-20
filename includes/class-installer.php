@@ -31,6 +31,7 @@ class Toptour_Core_Installer
         $charset_collate = $wpdb->get_charset_collate();
         $requests_table = $wpdb->prefix . 'toptour_requests';
         $request_meta_table = $wpdb->prefix . 'toptour_request_meta';
+        $customers_table = $wpdb->prefix . 'toptour_customers';
 
         $sql_requests = "CREATE TABLE {$requests_table} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -68,7 +69,21 @@ class Toptour_Core_Installer
             KEY meta_key (meta_key)
         ) {$charset_collate};";
 
+        $sql_customers = "CREATE TABLE {$customers_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            email VARCHAR(191) NOT NULL,
+            name VARCHAR(191) NULL,
+            phone VARCHAR(64) NULL,
+            first_seen_at DATETIME NOT NULL,
+            last_seen_at DATETIME NOT NULL,
+            inquiry_count INT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(32) NOT NULL DEFAULT 'lead',
+            PRIMARY KEY (id),
+            UNIQUE KEY email (email)
+        ) {$charset_collate};";
+
         dbDelta($sql_requests);
         dbDelta($sql_request_meta);
+        dbDelta($sql_customers);
     }
 }
