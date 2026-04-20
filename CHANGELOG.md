@@ -71,3 +71,14 @@ Changed:
 Notes:
 - email remains the customer identity
 - no customer merge logic yet when email changes
+
+## [1.1.22] - Admin customers overview
+
+Added:
+- new admin page for customer overview
+- paginated customer list from `toptour_customers`
+- basic search by name, email, and phone
+
+Notes:
+- first version is read-only
+- default sorting is by last activity descending

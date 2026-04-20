@@ -19,3 +19,15 @@ Why:
 Why:
 - keeps customer table aligned with edited requests
 - avoids premature complexity around merges and identity reconciliation
+
+## First admin customers overview
+
+- The first customers admin UI is read-only
+- Priority is visibility of leads/customers, not editing
+- Search is limited to name, email, and phone
+- Default order is by `last_seen_at DESC`
+
+Why:
+- gives immediate operational value
+- keeps the first UI small and stable
+- avoids premature CRM complexity
