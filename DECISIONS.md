@@ -31,3 +31,15 @@ Why:
 - gives immediate operational value
 - keeps the first UI small and stable
 - avoids premature CRM complexity
+
+## Customer edit/delete scope
+
+- Customer admin actions are limited to direct record maintenance
+- Editing updates only the customer record itself
+- Deleting removes only the customer record from `toptour_customers`
+- Requests/inquiries are not altered when a customer is edited or deleted
+
+Why:
+- gives operators direct control over customer data quality
+- keeps scope small and predictable
+- avoids premature relationship and merge complexity

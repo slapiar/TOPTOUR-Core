@@ -12,6 +12,16 @@ class Toptour_Module_Customers
     private $table_suffix = 'toptour_customers';
 
     /**
+     * @var string
+     */
+    private $admin_action_field = 'toptour_customer_action';
+
+    /**
+     * @var array<int, string>
+     */
+    private $allowed_statuses = array('lead', 'customer', 'inactive');
+
+    /**
      * Initialize customers module.
      */
     public function init()
@@ -43,6 +53,23 @@ class Toptour_Module_Customers
             return;
         }
 
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->handle_admin_customer_update_submission();
+        }
+
+        $action = isset($_GET['action']) ? sanitize_text_field(wp_unslash($_GET['action'])) : '';
+        if ($action === 'delete') {
+            $this->handle_admin_customer_delete_action();
+        }
+
+        $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : 'list';
+        $customer_id = isset($_GET['customer_id']) ? absint(wp_unslash($_GET['customer_id'])) : 0;
+
+        if ($view === 'edit' && $customer_id > 0) {
+            $this->render_admin_customer_edit_screen($customer_id);
+            return;
+        }
+
         $page = isset($_GET['paged']) ? absint(wp_unslash($_GET['paged'])) : 1;
         $page = max(1, $page);
 
@@ -61,6 +88,31 @@ class Toptour_Module_Customers
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html('TopTour - Zákazníci') . '</h1>';
+
+        if (isset($_GET['updated']) && wp_unslash($_GET['updated']) === '1') {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html('Záznam bol uložený.') . '</p></div>';
+        }
+
+        if (isset($_GET['deleted']) && wp_unslash($_GET['deleted']) === '1') {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html('Záznam bol odstránený.') . '</p></div>';
+        }
+
+        if (isset($_GET['error'])) {
+            $error = sanitize_text_field(wp_unslash($_GET['error']));
+            $error_messages = array(
+                'not-found' => 'Zákazník neexistuje.',
+                'invalid-request' => 'Neplatná požiadavka.',
+                'invalid-email' => 'Neplatný email.',
+                'invalid-status' => 'Neplatný status.',
+                'email-exists' => 'Tento email už používa iný zákazník.',
+                'save-failed' => 'Záznam sa nepodarilo uložiť.',
+                'delete-failed' => 'Záznam sa nepodarilo odstrániť.',
+            );
+
+            if (isset($error_messages[$error])) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($error_messages[$error]) . '</p></div>';
+            }
+        }
 
         echo '<form method="get" action="' . esc_url(admin_url('admin.php')) . '">';
         echo '<input type="hidden" name="page" value="toptour-customers" />';
@@ -97,9 +149,36 @@ class Toptour_Module_Customers
                 $first_seen_at = isset($customer->first_seen_at) && $customer->first_seen_at !== '' ? (string) $customer->first_seen_at : '-';
                 $last_seen_at = isset($customer->last_seen_at) && $customer->last_seen_at !== '' ? (string) $customer->last_seen_at : '-';
 
+                $edit_url = add_query_arg(
+                    array(
+                        'page' => 'toptour-customers',
+                        'view' => 'edit',
+                        'customer_id' => $id,
+                    ),
+                    admin_url('admin.php')
+                );
+
+                $delete_url = wp_nonce_url(
+                    add_query_arg(
+                        array(
+                            'page' => 'toptour-customers',
+                            'action' => 'delete',
+                            'customer_id' => $id,
+                        ),
+                        admin_url('admin.php')
+                    ),
+                    'toptour_customer_delete_' . $id
+                );
+
                 echo '<tr>';
                 echo '<td>' . esc_html((string) $id) . '</td>';
-                echo '<td>' . esc_html($name) . '</td>';
+                echo '<td>';
+                echo esc_html($name);
+                echo '<div class="row-actions">';
+                echo '<span class="edit"><a href="' . esc_url($edit_url) . '">' . esc_html('Upraviť') . '</a> | </span>';
+                echo '<span class="delete"><a href="' . esc_url($delete_url) . '" onclick="return confirm(\'' . esc_js('Naozaj chcete zmazať tohto zákazníka?') . '\');">' . esc_html('Zmazať') . '</a></span>';
+                echo '</div>';
+                echo '</td>';
                 echo '<td>' . esc_html($email) . '</td>';
                 echo '<td>' . esc_html($phone) . '</td>';
                 echo '<td>' . esc_html((string) $inquiry_count) . '</td>';
@@ -134,6 +213,230 @@ class Toptour_Module_Customers
         }
 
         echo '</div>';
+    }
+
+    /**
+     * Render customer edit screen.
+     *
+     * @param int $customer_id Customer ID.
+     */
+    private function render_admin_customer_edit_screen($customer_id)
+    {
+        $customer = $this->get_customer_by_id($customer_id);
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html('TopTour - Zákazníci') . '</h1>';
+
+        if (isset($_GET['error'])) {
+            $error = sanitize_text_field(wp_unslash($_GET['error']));
+            $error_messages = array(
+                'not-found' => 'Zákazník neexistuje.',
+                'invalid-request' => 'Neplatná požiadavka.',
+                'invalid-email' => 'Neplatný email.',
+                'invalid-status' => 'Neplatný status.',
+                'email-exists' => 'Tento email už používa iný zákazník.',
+                'save-failed' => 'Záznam sa nepodarilo uložiť.',
+            );
+
+            if (isset($error_messages[$error])) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($error_messages[$error]) . '</p></div>';
+            }
+        }
+
+        if (! is_object($customer)) {
+            echo '<div class="notice notice-error"><p>' . esc_html('Zákazník neexistuje.') . '</p></div>';
+            echo '<p><a href="' . esc_url($this->get_admin_customers_url()) . '">' . esc_html('Späť na zoznam') . '</a></p>';
+            echo '</div>';
+            return;
+        }
+
+        $name = isset($customer->name) ? (string) $customer->name : '';
+        $email = isset($customer->email) ? (string) $customer->email : '';
+        $phone = isset($customer->phone) ? (string) $customer->phone : '';
+        $status = isset($customer->status) ? (string) $customer->status : 'lead';
+        if (! in_array($status, $this->allowed_statuses, true)) {
+            $status = 'lead';
+        }
+
+        echo '<h2>' . esc_html('Upraviť zákazníka') . '</h2>';
+        echo '<form method="post" action="' . esc_url($this->get_admin_customers_url()) . '">';
+        wp_nonce_field('toptour_customer_update_' . $customer_id, '_wpnonce_toptour_customer_update');
+        echo '<input type="hidden" name="' . esc_attr($this->admin_action_field) . '" value="save_customer" />';
+        echo '<input type="hidden" name="customer_id" value="' . esc_attr((string) $customer_id) . '" />';
+
+        echo '<table class="form-table" role="presentation">';
+        echo '<tbody>';
+
+        echo '<tr>';
+        echo '<th scope="row"><label for="toptour_customer_name">' . esc_html('Name') . '</label></th>';
+        echo '<td><input name="name" type="text" id="toptour_customer_name" value="' . esc_attr($name) . '" class="regular-text" /></td>';
+        echo '</tr>';
+
+        echo '<tr>';
+        echo '<th scope="row"><label for="toptour_customer_email">' . esc_html('Email') . '</label></th>';
+        echo '<td><input name="email" type="email" id="toptour_customer_email" value="' . esc_attr($email) . '" class="regular-text" required /></td>';
+        echo '</tr>';
+
+        echo '<tr>';
+        echo '<th scope="row"><label for="toptour_customer_phone">' . esc_html('Phone') . '</label></th>';
+        echo '<td><input name="phone" type="text" id="toptour_customer_phone" value="' . esc_attr($phone) . '" class="regular-text" /></td>';
+        echo '</tr>';
+
+        echo '<tr>';
+        echo '<th scope="row"><label for="toptour_customer_status">' . esc_html('Status') . '</label></th>';
+        echo '<td><select name="status" id="toptour_customer_status">';
+        foreach ($this->allowed_statuses as $allowed_status) {
+            echo '<option value="' . esc_attr($allowed_status) . '" ' . selected($status, $allowed_status, false) . '>' . esc_html($allowed_status) . '</option>';
+        }
+        echo '</select></td>';
+        echo '</tr>';
+
+        echo '</tbody>';
+        echo '</table>';
+
+        echo '<p class="submit">';
+        echo '<button type="submit" class="button button-primary">' . esc_html('Uložiť') . '</button> ';
+        echo '<a href="' . esc_url($this->get_admin_customers_url()) . '" class="button button-secondary">' . esc_html('Späť na zoznam') . '</a>';
+        echo '</p>';
+
+        echo '</form>';
+        echo '</div>';
+    }
+
+    /**
+     * Handle admin customer update submit.
+     */
+    private function handle_admin_customer_update_submission()
+    {
+        if (! current_user_can('manage_options')) {
+            return;
+        }
+
+        $action = isset($_POST[$this->admin_action_field]) ? sanitize_text_field(wp_unslash($_POST[$this->admin_action_field])) : '';
+        if ($action !== 'save_customer') {
+            return;
+        }
+
+        $customer_id = isset($_POST['customer_id']) ? absint(wp_unslash($_POST['customer_id'])) : 0;
+        if ($customer_id <= 0) {
+            $this->redirect_to_list_with_args(array('error' => 'invalid-request'));
+        }
+
+        $nonce = isset($_POST['_wpnonce_toptour_customer_update']) ? sanitize_text_field(wp_unslash($_POST['_wpnonce_toptour_customer_update'])) : '';
+        if (! wp_verify_nonce($nonce, 'toptour_customer_update_' . $customer_id)) {
+            $this->redirect_to_edit_with_args($customer_id, array('error' => 'invalid-request'));
+        }
+
+        $customer = $this->get_customer_by_id($customer_id);
+        if (! is_object($customer)) {
+            $this->redirect_to_list_with_args(array('error' => 'not-found'));
+        }
+
+        $name = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+        $email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+        $phone = isset($_POST['phone']) ? sanitize_text_field(wp_unslash($_POST['phone'])) : '';
+        $status = isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : '';
+
+        if ($email === '' || ! is_email($email)) {
+            $this->redirect_to_edit_with_args($customer_id, array('error' => 'invalid-email'));
+        }
+
+        if (! in_array($status, $this->allowed_statuses, true)) {
+            $this->redirect_to_edit_with_args($customer_id, array('error' => 'invalid-status'));
+        }
+
+        $existing_customer = $this->find_customer_by_email($email);
+        if (is_object($existing_customer) && isset($existing_customer->id) && (int) $existing_customer->id !== $customer_id) {
+            $this->redirect_to_edit_with_args($customer_id, array('error' => 'email-exists'));
+        }
+
+        $updated = $this->update_customer_admin(
+            $customer_id,
+            array(
+                'name' => $name,
+                'email' => $email,
+                'phone' => $phone,
+                'status' => $status,
+            )
+        );
+
+        if (! $updated) {
+            $this->redirect_to_edit_with_args($customer_id, array('error' => 'save-failed'));
+        }
+
+        $this->redirect_to_list_with_args(array('updated' => '1'));
+    }
+
+    /**
+     * Handle admin customer delete action.
+     */
+    private function handle_admin_customer_delete_action()
+    {
+        if (! current_user_can('manage_options')) {
+            return;
+        }
+
+        $customer_id = isset($_GET['customer_id']) ? absint(wp_unslash($_GET['customer_id'])) : 0;
+        if ($customer_id <= 0) {
+            $this->redirect_to_list_with_args(array('error' => 'invalid-request'));
+        }
+
+        $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
+        if (! wp_verify_nonce($nonce, 'toptour_customer_delete_' . $customer_id)) {
+            $this->redirect_to_list_with_args(array('error' => 'invalid-request'));
+        }
+
+        $customer = $this->get_customer_by_id($customer_id);
+        if (! is_object($customer)) {
+            $this->redirect_to_list_with_args(array('error' => 'not-found'));
+        }
+
+        $deleted = $this->delete_customer($customer_id);
+        if (! $deleted) {
+            $this->redirect_to_list_with_args(array('error' => 'delete-failed'));
+        }
+
+        $this->redirect_to_list_with_args(array('deleted' => '1'));
+    }
+
+    /**
+     * Redirect to customers list with query args.
+     *
+     * @param array<string, string> $args
+     */
+    private function redirect_to_list_with_args($args = array())
+    {
+        wp_safe_redirect($this->get_admin_customers_url($args));
+        exit;
+    }
+
+    /**
+     * Redirect to customer edit with query args.
+     *
+     * @param int                   $customer_id
+     * @param array<string, string> $args
+     */
+    private function redirect_to_edit_with_args($customer_id, $args = array())
+    {
+        $base_args = array(
+            'view' => 'edit',
+            'customer_id' => (string) $customer_id,
+        );
+
+        wp_safe_redirect($this->get_admin_customers_url(array_merge($base_args, $args)));
+        exit;
+    }
+
+    /**
+     * Build customers admin URL.
+     *
+     * @param array<string, string|int> $args
+     * @return string
+     */
+    private function get_admin_customers_url($args = array())
+    {
+        $base_args = array('page' => 'toptour-customers');
+        return add_query_arg(array_merge($base_args, $args), admin_url('admin.php'));
     }
 
     /**
@@ -179,6 +482,96 @@ class Toptour_Module_Customers
             'items' => is_array($items) ? $items : array(),
             'total' => $total,
         );
+    }
+
+    /**
+     * Return single customer row by ID.
+     *
+     * @param int $customer_id Customer ID.
+     * @return object|null
+     */
+    public function get_customer_by_id($customer_id)
+    {
+        global $wpdb;
+
+        $customer_id = (int) $customer_id;
+        if ($customer_id <= 0) {
+            return null;
+        }
+
+        $table_name = $wpdb->prefix . $this->table_suffix;
+        $sql = $wpdb->prepare(
+            "SELECT id, name, email, phone, inquiry_count, status, first_seen_at, last_seen_at FROM {$table_name} WHERE id = %d LIMIT 1",
+            $customer_id
+        );
+
+        $customer = $wpdb->get_row($sql);
+        return is_object($customer) ? $customer : null;
+    }
+
+    /**
+     * Update customer row from admin edit screen.
+     *
+     * @param int                  $customer_id Customer ID.
+     * @param array<string, mixed> $data Input values.
+     * @return bool
+     */
+    public function update_customer_admin($customer_id, $data)
+    {
+        global $wpdb;
+
+        $customer_id = (int) $customer_id;
+        if ($customer_id <= 0) {
+            return false;
+        }
+
+        $email = isset($data['email']) ? sanitize_email((string) $data['email']) : '';
+        $status = isset($data['status']) ? sanitize_text_field((string) $data['status']) : '';
+
+        if ($email === '' || ! is_email($email)) {
+            return false;
+        }
+
+        if (! in_array($status, $this->allowed_statuses, true)) {
+            return false;
+        }
+
+        $table_name = $wpdb->prefix . $this->table_suffix;
+        $updated = $wpdb->update(
+            $table_name,
+            array(
+                'name' => isset($data['name']) ? sanitize_text_field((string) $data['name']) : '',
+                'email' => $email,
+                'phone' => isset($data['phone']) ? sanitize_text_field((string) $data['phone']) : '',
+                'status' => $status,
+            ),
+            array('id' => $customer_id),
+            array('%s', '%s', '%s', '%s'),
+            array('%d')
+        );
+
+        return $updated !== false;
+    }
+
+    /**
+     * Delete customer row by ID.
+     *
+     * @param int $customer_id Customer ID.
+     * @return bool
+     */
+    public function delete_customer($customer_id)
+    {
+        global $wpdb;
+
+        $customer_id = (int) $customer_id;
+        if ($customer_id <= 0) {
+            return false;
+        }
+
+        $table_name = $wpdb->prefix . $this->table_suffix;
+        $deleted = $wpdb->delete($table_name, array('id' => $customer_id), array('%d'));
+
+        return $deleted !== false;
     }
 
     /**

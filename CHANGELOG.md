@@ -82,3 +82,14 @@ Added:
 Notes:
 - first version is read-only
 - default sorting is by last activity descending
+
+## [1.1.23] - Customer edit and delete actions
+
+Added:
+- row actions for editing and deleting customer records
+- admin form for editing customer name, email, phone, and status
+
+Notes:
+- delete affects only the `toptour_customers` table
+- request/inquiry records are not modified
+- no merge logic is introduced in this phase
