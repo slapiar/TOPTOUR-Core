@@ -773,6 +773,22 @@ class Toptour_Module_Customers
     }
 
     /**
+     * Return single customer row by email.
+     *
+     * @param string $email Customer email.
+     * @return object|null
+     */
+    public function get_customer_by_email($email)
+    {
+        $email = sanitize_email((string) $email);
+        if ($email === '' || ! is_email($email)) {
+            return null;
+        }
+
+        return $this->find_customer_by_email($email);
+    }
+
+    /**
      * Return related requests by customer email.
      *
      * @param string $email Customer email.

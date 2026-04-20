@@ -165,6 +165,9 @@ class Toptour_Module_Reservations
         if (empty($requests)) {
             echo '<tr><td colspan="11">No requests found.</td></tr>';
         } else {
+            $customers_module = class_exists('Toptour_Module_Customers') ? new Toptour_Module_Customers() : null;
+            $customer_link_map = array();
+
             foreach ($requests as $request) {
                 $edit_url = add_query_arg(
                     array_merge(
@@ -192,13 +195,48 @@ class Toptour_Module_Reservations
                     self::ADMIN_DELETE_NONCE_ACTION . '_' . (int) $request->id
                 );
 
+                $customer_email = isset($request->customer_email) ? sanitize_email((string) $request->customer_email) : '';
+                $customer_name = isset($request->customer_name) ? (string) $request->customer_name : '';
+                $customer_detail_url = '';
+
+                if ($customer_email !== '' && $customers_module instanceof Toptour_Module_Customers) {
+                    if (! array_key_exists($customer_email, $customer_link_map)) {
+                        $customer = $customers_module->get_customer_by_email($customer_email);
+                        $customer_id = (is_object($customer) && isset($customer->id)) ? (int) $customer->id : 0;
+
+                        $customer_link_map[$customer_email] = $customer_id > 0
+                            ? add_query_arg(
+                                array_merge(
+                                    array(
+                                        'page' => 'toptour-customers',
+                                        'view' => 'detail',
+                                        'customer_id' => $customer_id,
+                                    ),
+                                    $list_context
+                                ),
+                                admin_url('admin.php')
+                            )
+                            : '';
+                    }
+
+                    $customer_detail_url = (string) $customer_link_map[$customer_email];
+                }
+
+                $customer_name_output = $customer_name !== '' ? esc_html($customer_name) : '-';
+                $customer_email_output = $customer_email !== '' ? esc_html($customer_email) : '-';
+
+                if ($customer_detail_url !== '') {
+                    $customer_name_output = '<a href="' . esc_url($customer_detail_url) . '">' . $customer_name_output . '</a>';
+                    $customer_email_output = '<a href="' . esc_url($customer_detail_url) . '">' . $customer_email_output . '</a>';
+                }
+
                 echo '<tr>';
                 echo '<td>' . esc_html((string) $request->id) . '</td>';
                 echo '<td>' . esc_html((string) $request->created_at) . '</td>';
                 echo '<td>' . esc_html((string) $request->offer_id) . '</td>';
                 echo '<td>' . esc_html((string) $request->manager_user_id) . '</td>';
-                echo '<td>' . esc_html((string) $request->customer_name) . '</td>';
-                echo '<td>' . esc_html((string) $request->customer_email) . '</td>';
+                echo '<td>' . $customer_name_output . '</td>';
+                echo '<td>' . $customer_email_output . '</td>';
                 echo '<td>' . esc_html((string) $request->customer_phone) . '</td>';
                 echo '<td>' . esc_html((string) $request->date_from) . '</td>';
                 echo '<td>' . esc_html((string) $request->date_to) . '</td>';

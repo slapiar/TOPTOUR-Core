@@ -88,3 +88,14 @@ Why:
 - improves day-to-day operability
 - creates a natural next step beyond list-only management
 - keeps scope small and stable
+
+## Requests -> Customer navigation
+
+- Requests list links to Customer detail using email-based lookup
+- Navigation is one-way in this phase (Requests -> Customer)
+- No automatic customer creation is triggered during navigation
+
+Why:
+- improves operational flow between requests and customers
+- leverages existing data without introducing complexity
+- keeps scope minimal and safe

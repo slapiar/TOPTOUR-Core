@@ -135,3 +135,13 @@ Added:
 
 Notes:
 - related requests are shown only if available through a clean read-only lookup
+
+## [1.1.29] - Requests to Customer detail navigation
+
+Added:
+- clickable customer name/email in Requests list
+- direct navigation to Customer detail view from Requests
+
+Notes:
+- customer is resolved by email
+- no customer is created if not found
