@@ -90,6 +90,7 @@ rsync -av \
   --exclude=".DS_Store" \
   --exclude="node_modules" \
   --exclude="release.sh" \
+  --exclude="zdrojak.sh" \
   ./ "$BUILD_DIR/$PLUGIN_SLUG/"
 
 ZIP_FILE="$DIST_DIR/${PLUGIN_SLUG}-${NEW_VERSION}.zip"
