@@ -62,3 +62,12 @@ Changed:
 Notes:
 - release ZIP still contains the full plugin
 - archive/backup artifacts are excluded from packaging
+
+## [1.1.1] - Customer sync on admin request edit
+
+Changed:
+- when an inquiry/request is edited in admin, current customer data is synced again to `toptour_customers`
+
+Notes:
+- email remains the customer identity
+- no customer merge logic yet when email changes

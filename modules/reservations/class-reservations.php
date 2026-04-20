@@ -292,6 +292,17 @@ class Toptour_Module_Reservations
         );
 
         if ($updated !== false) {
+            if ($customer_email !== '' && class_exists('Toptour_Module_Customers')) {
+                $customers_module = new Toptour_Module_Customers();
+                $customers_module->upsert_customer(
+                    array(
+                        'name' => $customer_name,
+                        'email' => $customer_email,
+                        'phone' => $customer_phone,
+                    )
+                );
+            }
+
             $request_data = array(
                 'offer_id' => is_object($existing_request) && isset($existing_request->offer_id) ? (int) $existing_request->offer_id : 0,
                 'manager_user_id' => is_object($existing_request) && isset($existing_request->manager_user_id) ? (int) $existing_request->manager_user_id : 0,

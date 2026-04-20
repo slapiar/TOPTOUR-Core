@@ -11,6 +11,8 @@ class Toptour_Core_Loader
      */
     public static function run()
     {
+        self::maybe_upgrade_database();
+
         $modules = self::load_modules();
 
         foreach ($modules as $module_class) {
@@ -50,5 +52,39 @@ class Toptour_Core_Loader
             'Toptour_Module_Customers',
             'Toptour_Module_Reservations',
         );
+    }
+
+    /**
+     * Run idempotent runtime DB upgrade for existing installs.
+     */
+    private static function maybe_upgrade_database()
+    {
+        if (! function_exists('get_option') || ! function_exists('update_option')) {
+            return;
+        }
+
+        $installed_version = get_option('toptour_core_db_version', '');
+        $is_missing_version = ($installed_version === false || $installed_version === '');
+
+        $installed_version = (string) $installed_version;
+
+        if (! $is_missing_version && ! version_compare($installed_version, TOPTOUR_CORE_DB_VERSION, '<')) {
+            return;
+        }
+
+        if (! class_exists('Toptour_Core_Installer')) {
+            $installer_file = TOPTOUR_CORE_PATH . 'includes/class-installer.php';
+
+            if (file_exists($installer_file)) {
+                require_once $installer_file;
+            }
+        }
+
+        if (! class_exists('Toptour_Core_Installer')) {
+            return;
+        }
+
+        Toptour_Core_Installer::install();
+        update_option('toptour_core_db_version', TOPTOUR_CORE_DB_VERSION);
     }
 }

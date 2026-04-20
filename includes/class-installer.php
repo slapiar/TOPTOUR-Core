@@ -9,7 +9,7 @@ class Toptour_Core_Installer
     /**
      * DB schema version.
      */
-    public const DB_VERSION = '1.0.0';
+    public const DB_VERSION = '1.1.0';
 
     /**
      * Run installer tasks.
