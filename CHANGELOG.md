@@ -93,3 +93,12 @@ Notes:
 - delete affects only the `toptour_customers` table
 - request/inquiry records are not modified
 - no merge logic is introduced in this phase
+
+## [1.1.25] - Preserve customers list context after edit/delete
+
+Changed:
+- customer edit and delete actions now preserve current list context
+- pagination and search state are retained after returning to the overview
+
+Notes:
+- preserved context currently includes page number and search term only

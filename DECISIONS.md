@@ -43,3 +43,14 @@ Why:
 - gives operators direct control over customer data quality
 - keeps scope small and predictable
 - avoids premature relationship and merge complexity
+
+## Preserve customers list context
+
+- Customer admin actions should return the operator to the same list context
+- Preserved context is limited to current pagination and search term
+- Only explicit, sanitized context parameters are carried across requests
+
+Why:
+- improves usability of the admin customers overview
+- reduces friction when managing larger customer lists
+- keeps the solution small and predictable

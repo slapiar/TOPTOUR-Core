@@ -86,6 +86,13 @@ class Toptour_Module_Customers
             $base_args['s'] = $search;
         }
 
+        $list_context = array(
+            'paged' => $page,
+        );
+        if ($search !== '') {
+            $list_context['s'] = $search;
+        }
+
         echo '<div class="wrap">';
         echo '<h1>' . esc_html('TopTour - Zákazníci') . '</h1>';
 
@@ -150,20 +157,26 @@ class Toptour_Module_Customers
                 $last_seen_at = isset($customer->last_seen_at) && $customer->last_seen_at !== '' ? (string) $customer->last_seen_at : '-';
 
                 $edit_url = add_query_arg(
-                    array(
-                        'page' => 'toptour-customers',
-                        'view' => 'edit',
-                        'customer_id' => $id,
+                    array_merge(
+                        array(
+                            'page' => 'toptour-customers',
+                            'view' => 'edit',
+                            'customer_id' => $id,
+                        ),
+                        $list_context
                     ),
                     admin_url('admin.php')
                 );
 
                 $delete_url = wp_nonce_url(
                     add_query_arg(
-                        array(
-                            'page' => 'toptour-customers',
-                            'action' => 'delete',
-                            'customer_id' => $id,
+                        array_merge(
+                            array(
+                                'page' => 'toptour-customers',
+                                'action' => 'delete',
+                                'customer_id' => $id,
+                            ),
+                            $list_context
                         ),
                         admin_url('admin.php')
                     ),
@@ -223,6 +236,7 @@ class Toptour_Module_Customers
     private function render_admin_customer_edit_screen($customer_id)
     {
         $customer = $this->get_customer_by_id($customer_id);
+        $list_context = $this->get_list_context_from_get();
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html('TopTour - Zákazníci') . '</h1>';
@@ -263,6 +277,12 @@ class Toptour_Module_Customers
         wp_nonce_field('toptour_customer_update_' . $customer_id, '_wpnonce_toptour_customer_update');
         echo '<input type="hidden" name="' . esc_attr($this->admin_action_field) . '" value="save_customer" />';
         echo '<input type="hidden" name="customer_id" value="' . esc_attr((string) $customer_id) . '" />';
+        if (isset($list_context['paged'])) {
+            echo '<input type="hidden" name="paged" value="' . esc_attr((string) $list_context['paged']) . '" />';
+        }
+        if (isset($list_context['s'])) {
+            echo '<input type="hidden" name="s" value="' . esc_attr((string) $list_context['s']) . '" />';
+        }
 
         echo '<table class="form-table" role="presentation">';
         echo '<tbody>';
@@ -296,7 +316,7 @@ class Toptour_Module_Customers
 
         echo '<p class="submit">';
         echo '<button type="submit" class="button button-primary">' . esc_html('Uložiť') . '</button> ';
-        echo '<a href="' . esc_url($this->get_admin_customers_url()) . '" class="button button-secondary">' . esc_html('Späť na zoznam') . '</a>';
+        echo '<a href="' . esc_url($this->get_admin_customers_url($list_context)) . '" class="button button-secondary">' . esc_html('Späť na zoznam') . '</a>';
         echo '</p>';
 
         echo '</form>';
@@ -312,6 +332,8 @@ class Toptour_Module_Customers
             return;
         }
 
+        $list_context = $this->get_list_context_from_post();
+
         $action = isset($_POST[$this->admin_action_field]) ? sanitize_text_field(wp_unslash($_POST[$this->admin_action_field])) : '';
         if ($action !== 'save_customer') {
             return;
@@ -319,17 +341,17 @@ class Toptour_Module_Customers
 
         $customer_id = isset($_POST['customer_id']) ? absint(wp_unslash($_POST['customer_id'])) : 0;
         if ($customer_id <= 0) {
-            $this->redirect_to_list_with_args(array('error' => 'invalid-request'));
+            $this->redirect_to_list_with_args(array_merge($list_context, array('error' => 'invalid-request')));
         }
 
         $nonce = isset($_POST['_wpnonce_toptour_customer_update']) ? sanitize_text_field(wp_unslash($_POST['_wpnonce_toptour_customer_update'])) : '';
         if (! wp_verify_nonce($nonce, 'toptour_customer_update_' . $customer_id)) {
-            $this->redirect_to_edit_with_args($customer_id, array('error' => 'invalid-request'));
+            $this->redirect_to_edit_with_args($customer_id, array_merge($list_context, array('error' => 'invalid-request')));
         }
 
         $customer = $this->get_customer_by_id($customer_id);
         if (! is_object($customer)) {
-            $this->redirect_to_list_with_args(array('error' => 'not-found'));
+            $this->redirect_to_list_with_args(array_merge($list_context, array('error' => 'not-found')));
         }
 
         $name = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
@@ -338,16 +360,16 @@ class Toptour_Module_Customers
         $status = isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : '';
 
         if ($email === '' || ! is_email($email)) {
-            $this->redirect_to_edit_with_args($customer_id, array('error' => 'invalid-email'));
+            $this->redirect_to_edit_with_args($customer_id, array_merge($list_context, array('error' => 'invalid-email')));
         }
 
         if (! in_array($status, $this->allowed_statuses, true)) {
-            $this->redirect_to_edit_with_args($customer_id, array('error' => 'invalid-status'));
+            $this->redirect_to_edit_with_args($customer_id, array_merge($list_context, array('error' => 'invalid-status')));
         }
 
         $existing_customer = $this->find_customer_by_email($email);
         if (is_object($existing_customer) && isset($existing_customer->id) && (int) $existing_customer->id !== $customer_id) {
-            $this->redirect_to_edit_with_args($customer_id, array('error' => 'email-exists'));
+            $this->redirect_to_edit_with_args($customer_id, array_merge($list_context, array('error' => 'email-exists')));
         }
 
         $updated = $this->update_customer_admin(
@@ -361,10 +383,10 @@ class Toptour_Module_Customers
         );
 
         if (! $updated) {
-            $this->redirect_to_edit_with_args($customer_id, array('error' => 'save-failed'));
+            $this->redirect_to_edit_with_args($customer_id, array_merge($list_context, array('error' => 'save-failed')));
         }
 
-        $this->redirect_to_list_with_args(array('updated' => '1'));
+        $this->redirect_to_list_with_args(array_merge($list_context, array('updated' => '1')));
     }
 
     /**
@@ -376,27 +398,82 @@ class Toptour_Module_Customers
             return;
         }
 
+        $list_context = $this->get_list_context_from_get();
+
         $customer_id = isset($_GET['customer_id']) ? absint(wp_unslash($_GET['customer_id'])) : 0;
         if ($customer_id <= 0) {
-            $this->redirect_to_list_with_args(array('error' => 'invalid-request'));
+            $this->redirect_to_list_with_args(array_merge($list_context, array('error' => 'invalid-request')));
         }
 
         $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
         if (! wp_verify_nonce($nonce, 'toptour_customer_delete_' . $customer_id)) {
-            $this->redirect_to_list_with_args(array('error' => 'invalid-request'));
+            $this->redirect_to_list_with_args(array_merge($list_context, array('error' => 'invalid-request')));
         }
 
         $customer = $this->get_customer_by_id($customer_id);
         if (! is_object($customer)) {
-            $this->redirect_to_list_with_args(array('error' => 'not-found'));
+            $this->redirect_to_list_with_args(array_merge($list_context, array('error' => 'not-found')));
         }
 
         $deleted = $this->delete_customer($customer_id);
         if (! $deleted) {
-            $this->redirect_to_list_with_args(array('error' => 'delete-failed'));
+            $this->redirect_to_list_with_args(array_merge($list_context, array('error' => 'delete-failed')));
         }
 
-        $this->redirect_to_list_with_args(array('deleted' => '1'));
+        $this->redirect_to_list_with_args(array_merge($list_context, array('deleted' => '1')));
+    }
+
+    /**
+     * Return sanitized list context from query params.
+     *
+     * @return array<string, string|int>
+     */
+    private function get_list_context_from_get()
+    {
+        return $this->sanitize_list_context($_GET);
+    }
+
+    /**
+     * Return sanitized list context from POST payload.
+     *
+     * @return array<string, string|int>
+     */
+    private function get_list_context_from_post()
+    {
+        return $this->sanitize_list_context($_POST);
+    }
+
+    /**
+     * Sanitize and whitelist list context values.
+     *
+     * @param array<mixed> $raw
+     * @return array<string, string|int>
+     */
+    private function sanitize_list_context($raw)
+    {
+        $context = array();
+
+        if (isset($raw['paged'])) {
+            $paged_raw = wp_unslash($raw['paged']);
+            if (is_scalar($paged_raw)) {
+                $paged = absint((string) $paged_raw);
+                if ($paged >= 1) {
+                    $context['paged'] = $paged;
+                }
+            }
+        }
+
+        if (isset($raw['s'])) {
+            $search_raw = wp_unslash($raw['s']);
+            if (is_scalar($search_raw)) {
+                $search = sanitize_text_field((string) $search_raw);
+                if ($search !== '') {
+                    $context['s'] = $search;
+                }
+            }
+        }
+
+        return $context;
     }
 
     /**
