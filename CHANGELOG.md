@@ -145,3 +145,12 @@ Added:
 Notes:
 - customer is resolved by email
 - no customer is created if not found
+
+## [1.1.30] - Customer detail to Request navigation
+
+Added:
+- direct navigation from related requests in Customer detail to the corresponding Request admin screen
+
+Notes:
+- uses existing Request admin routing only
+- no new Request detail screen is introduced in this phase

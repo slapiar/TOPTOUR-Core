@@ -334,8 +334,21 @@ class Toptour_Module_Customers
                     $note = isset($request->note) && $request->note !== '' ? (string) $request->note : '-';
                     $note_excerpt = $note === '-' ? '-' : wp_html_excerpt(wp_strip_all_tags($note), 120, '...');
 
+                    $request_id_output = esc_html((string) $request_id);
+                    if ($request_id > 0) {
+                        $request_admin_url = add_query_arg(
+                            array(
+                                'page' => 'toptour',
+                                'view' => 'edit',
+                                'request_id' => $request_id,
+                            ),
+                            admin_url('admin.php')
+                        );
+                        $request_id_output = '<a href="' . esc_url($request_admin_url) . '">' . esc_html((string) $request_id) . '</a>';
+                    }
+
                     echo '<tr>';
-                    echo '<td>' . esc_html((string) $request_id) . '</td>';
+                    echo '<td>' . $request_id_output . '</td>';
                     echo '<td>' . esc_html($created_at) . '</td>';
                     echo '<td>' . $this->render_admin_status_badge($request_status) . '</td>';
                     echo '<td>' . esc_html($request_type) . '</td>';

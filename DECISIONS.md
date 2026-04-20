@@ -99,3 +99,14 @@ Why:
 - improves operational flow between requests and customers
 - leverages existing data without introducing complexity
 - keeps scope minimal and safe
+
+## Customer detail -> Request navigation
+
+- Related requests in Customer detail link to the existing Request admin screen
+- Navigation reuses current Request routing instead of introducing a new Request detail view
+- Scope is limited to operational navigation only
+
+Why:
+- improves operator workflow between customer context and individual requests
+- strengthens the practical connection between Customers and Requests
+- keeps implementation minimal and low-risk
