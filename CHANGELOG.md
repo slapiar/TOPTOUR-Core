@@ -126,3 +126,12 @@ Changed:
 
 Notes:
 - allowed customer status filters are lead, customer, and inactive
+
+## [1.1.28] - Customer detail view
+
+Added:
+- read-only customer detail view in admin
+- back navigation to customers overview with preserved context
+
+Notes:
+- related requests are shown only if available through a clean read-only lookup

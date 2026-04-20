@@ -77,3 +77,14 @@ Why:
 - improves day-to-day usability of customer management
 - keeps the customers admin UI small and predictable
 - avoids premature CRM complexity
+
+## First customer detail view scope
+
+- Customer detail view is read-only in the first phase
+- Priority is seeing one customer clearly in one place
+- Related requests are included only if they can be shown cleanly without adding relationship complexity
+
+Why:
+- improves day-to-day operability
+- creates a natural next step beyond list-only management
+- keeps scope small and stable

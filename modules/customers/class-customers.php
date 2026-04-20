@@ -65,6 +65,11 @@ class Toptour_Module_Customers
         $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : 'list';
         $customer_id = isset($_GET['customer_id']) ? absint(wp_unslash($_GET['customer_id'])) : 0;
 
+        if ($view === 'detail' && $customer_id > 0) {
+            $this->render_admin_customer_detail_screen($customer_id);
+            return;
+        }
+
         if ($view === 'edit' && $customer_id > 0) {
             $this->render_admin_customer_edit_screen($customer_id);
             return;
@@ -185,6 +190,18 @@ class Toptour_Module_Customers
                     admin_url('admin.php')
                 );
 
+                $detail_url = add_query_arg(
+                    array_merge(
+                        array(
+                            'page' => 'toptour-customers',
+                            'view' => 'detail',
+                            'customer_id' => $id,
+                        ),
+                        $list_context
+                    ),
+                    admin_url('admin.php')
+                );
+
                 $delete_url = wp_nonce_url(
                     add_query_arg(
                         array_merge(
@@ -205,6 +222,7 @@ class Toptour_Module_Customers
                 echo '<td>';
                 echo esc_html($name);
                 echo '<div class="row-actions">';
+                echo '<span class="view"><a href="' . esc_url($detail_url) . '">' . esc_html('Zobraziť') . '</a> | </span>';
                 echo '<span class="edit"><a href="' . esc_url($edit_url) . '">' . esc_html('Upraviť') . '</a> | </span>';
                 echo '<span class="delete"><a href="' . esc_url($delete_url) . '" onclick="return confirm(\'' . esc_js('Naozaj chcete zmazať tohto zákazníka?') . '\');">' . esc_html('Zmazať') . '</a></span>';
                 echo '</div>';
@@ -242,6 +260,96 @@ class Toptour_Module_Customers
             }
         }
 
+        echo '</div>';
+    }
+
+    /**
+     * Render read-only customer detail screen.
+     *
+     * @param int $customer_id Customer ID.
+     */
+    private function render_admin_customer_detail_screen($customer_id)
+    {
+        $customer = $this->get_customer_by_id($customer_id);
+        $list_context = $this->get_list_context_from_get();
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html('TopTour - Zákazníci') . '</h1>';
+        $this->render_admin_status_badge_styles();
+
+        if (! is_object($customer)) {
+            echo '<div class="notice notice-error"><p>' . esc_html('Zákazník neexistuje.') . '</p></div>';
+            echo '<p><a href="' . esc_url($this->get_admin_customers_url($list_context)) . '">' . esc_html('Späť na zoznam') . '</a></p>';
+            echo '</div>';
+            return;
+        }
+
+        $id = isset($customer->id) ? (int) $customer->id : 0;
+        $name = isset($customer->name) && $customer->name !== '' ? (string) $customer->name : '-';
+        $email = isset($customer->email) && $customer->email !== '' ? (string) $customer->email : '-';
+        $phone = isset($customer->phone) && $customer->phone !== '' ? (string) $customer->phone : '-';
+        $status = isset($customer->status) ? (string) $customer->status : '';
+        $inquiry_count = isset($customer->inquiry_count) ? (int) $customer->inquiry_count : 0;
+        $first_seen_at = isset($customer->first_seen_at) && $customer->first_seen_at !== '' ? (string) $customer->first_seen_at : '-';
+        $last_seen_at = isset($customer->last_seen_at) && $customer->last_seen_at !== '' ? (string) $customer->last_seen_at : '-';
+
+        echo '<h2>' . esc_html('Detail zákazníka') . '</h2>';
+        echo '<table class="form-table" role="presentation">';
+        echo '<tbody>';
+        echo '<tr><th scope="row">' . esc_html('ID') . '</th><td>' . esc_html((string) $id) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('Name') . '</th><td>' . esc_html($name) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('Email') . '</th><td>' . esc_html($email) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('Phone') . '</th><td>' . esc_html($phone) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('Status') . '</th><td>' . $this->render_admin_status_badge($status) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('Inquiry count') . '</th><td>' . esc_html((string) $inquiry_count) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('First seen') . '</th><td>' . esc_html($first_seen_at) . '</td></tr>';
+        echo '<tr><th scope="row">' . esc_html('Last seen') . '</th><td>' . esc_html($last_seen_at) . '</td></tr>';
+        echo '</tbody>';
+        echo '</table>';
+
+        if ($email !== '-') {
+            $related_requests = $this->get_customer_requests_by_email($email);
+
+            echo '<h2>' . esc_html('Súvisiace požiadavky') . '</h2>';
+            echo '<table class="widefat fixed striped">';
+            echo '<thead><tr>';
+            echo '<th>' . esc_html('Request ID') . '</th>';
+            echo '<th>' . esc_html('Created') . '</th>';
+            echo '<th>' . esc_html('Status') . '</th>';
+            echo '<th>' . esc_html('Type') . '</th>';
+            echo '<th>' . esc_html('Offer ID') . '</th>';
+            echo '<th>' . esc_html('Note') . '</th>';
+            echo '</tr></thead>';
+            echo '<tbody>';
+
+            if (empty($related_requests)) {
+                echo '<tr><td colspan="6">' . esc_html('No related requests found.') . '</td></tr>';
+            } else {
+                foreach ($related_requests as $request) {
+                    $request_id = isset($request->id) ? (int) $request->id : 0;
+                    $created_at = isset($request->created_at) && $request->created_at !== '' ? (string) $request->created_at : '-';
+                    $request_status = isset($request->status) ? (string) $request->status : '';
+                    $request_type = isset($request->request_type) && $request->request_type !== '' ? (string) $request->request_type : '-';
+                    $offer_id = isset($request->offer_id) ? (string) $request->offer_id : '-';
+                    $note = isset($request->note) && $request->note !== '' ? (string) $request->note : '-';
+                    $note_excerpt = $note === '-' ? '-' : wp_html_excerpt(wp_strip_all_tags($note), 120, '...');
+
+                    echo '<tr>';
+                    echo '<td>' . esc_html((string) $request_id) . '</td>';
+                    echo '<td>' . esc_html($created_at) . '</td>';
+                    echo '<td>' . $this->render_admin_status_badge($request_status) . '</td>';
+                    echo '<td>' . esc_html($request_type) . '</td>';
+                    echo '<td>' . esc_html($offer_id) . '</td>';
+                    echo '<td>' . esc_html($note_excerpt) . '</td>';
+                    echo '</tr>';
+                }
+            }
+
+            echo '</tbody>';
+            echo '</table>';
+        }
+
+        echo '<p><a href="' . esc_url($this->get_admin_customers_url($list_context)) . '" class="button button-secondary">' . esc_html('Späť na zoznam') . '</a></p>';
         echo '</div>';
     }
 
@@ -662,6 +770,31 @@ class Toptour_Module_Customers
 
         $customer = $wpdb->get_row($sql);
         return is_object($customer) ? $customer : null;
+    }
+
+    /**
+     * Return related requests by customer email.
+     *
+     * @param string $email Customer email.
+     * @return array<int, object>
+     */
+    public function get_customer_requests_by_email($email)
+    {
+        global $wpdb;
+
+        $email = sanitize_email((string) $email);
+        if ($email === '' || ! is_email($email)) {
+            return array();
+        }
+
+        $requests_table = $wpdb->prefix . 'toptour_requests';
+        $sql = $wpdb->prepare(
+            "SELECT id, created_at, status, request_type, offer_id, note FROM {$requests_table} WHERE customer_email = %s ORDER BY created_at DESC LIMIT 50",
+            $email
+        );
+        $rows = $wpdb->get_results($sql);
+
+        return is_array($rows) ? $rows : array();
     }
 
     /**
