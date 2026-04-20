@@ -105,6 +105,7 @@ class Toptour_Module_Customers
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html('TopTour - Zákazníci') . '</h1>';
+        $this->render_admin_status_badge_styles();
 
         if (isset($_GET['updated']) && wp_unslash($_GET['updated']) === '1') {
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html('Záznam bol uložený.') . '</p></div>';
@@ -168,7 +169,7 @@ class Toptour_Module_Customers
                 $email = isset($customer->email) && $customer->email !== '' ? (string) $customer->email : '-';
                 $phone = isset($customer->phone) && $customer->phone !== '' ? (string) $customer->phone : '-';
                 $inquiry_count = isset($customer->inquiry_count) ? (int) $customer->inquiry_count : 0;
-                $status = isset($customer->status) && $customer->status !== '' ? (string) $customer->status : '-';
+                $status = isset($customer->status) ? (string) $customer->status : '';
                 $first_seen_at = isset($customer->first_seen_at) && $customer->first_seen_at !== '' ? (string) $customer->first_seen_at : '-';
                 $last_seen_at = isset($customer->last_seen_at) && $customer->last_seen_at !== '' ? (string) $customer->last_seen_at : '-';
 
@@ -211,7 +212,7 @@ class Toptour_Module_Customers
                 echo '<td>' . esc_html($email) . '</td>';
                 echo '<td>' . esc_html($phone) . '</td>';
                 echo '<td>' . esc_html((string) $inquiry_count) . '</td>';
-                echo '<td>' . esc_html($status) . '</td>';
+                echo '<td>' . $this->render_admin_status_badge($status) . '</td>';
                 echo '<td>' . esc_html($first_seen_at) . '</td>';
                 echo '<td>' . esc_html($last_seen_at) . '</td>';
                 echo '</tr>';
@@ -503,6 +504,39 @@ class Toptour_Module_Customers
         }
 
         return $context;
+    }
+
+    /**
+     * Render minimal shared status badge styles for admin list.
+     */
+    private function render_admin_status_badge_styles()
+    {
+        echo '<style>';
+        echo '.tt-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:500;line-height:1.5;}';
+        echo '.tt-status-lead{background:#d4edda;color:#155724;}';
+        echo '.tt-status-customer{background:#d1ecf1;color:#0c5460;}';
+        echo '.tt-status-inactive{background:#e2e3e5;color:#6c757d;}';
+        echo '.tt-status-new{background:#cce5ff;color:#004085;}';
+        echo '.tt-status-approved{background:#d4edda;color:#155724;}';
+        echo '.tt-status-rejected{background:#f8d7da;color:#721c24;}';
+        echo '.tt-status-reserved{background:#fff3cd;color:#856404;}';
+        echo '</style>';
+    }
+
+    /**
+     * Render status value as badge element.
+     *
+     * @param string $status Status value.
+     * @return string
+     */
+    private function render_admin_status_badge($status)
+    {
+        $status = sanitize_text_field((string) $status);
+        if ($status === '') {
+            return '-';
+        }
+
+        return '<span class="tt-status tt-status-' . esc_attr(sanitize_html_class($status)) . '">' . esc_html($status) . '</span>';
     }
 
     /**
